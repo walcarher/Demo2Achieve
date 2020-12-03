@@ -99,8 +99,11 @@ def updateGraph(frame):
  
     # Draw average GPU power consumption
     gpuy_list.popleft()
-    with open(gpuLoadFile, 'r') as gpuFile:
-      fileData = gpuFile.read()
+    try:
+        with open(gpuLoadFile, 'r') as gpuFile:
+          fileData = gpuFile.read()
+    except IOError:
+        fileData = '0'
     # The GPU power is in mW
     gpuy_list.append(int(fileData))
     gpuLine.set_data(gpux_list,gpuy_list)
@@ -108,8 +111,11 @@ def updateGraph(frame):
     gpu_fill_lines=ax.fill_between(gpux_list,0,gpuy_list, facecolor='green', alpha=0.25)
     # Draw average FPGA power consumption
     fpgay_list.popleft()
-    with open(fpgaLoadFile, 'r') as fpgaFile:
-      fileData = fpgaFile.read()
+    try:
+        with open(fpgaLoadFile, 'r') as fpgaFile:
+          fileData = fpgaFile.read()
+    except IOError:
+        fileData = '0'
     # The FPGA power is in mW
     fpgay_list.append(int(fileData))
     fpgaLine.set_data(fpgax_list,fpgay_list)
