@@ -684,8 +684,6 @@ u32 rp_tmp, ep_tmp;
 static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev)
 {
 
-    u8 *rp_rd_buffer_virt_addr = bk_ptr->rp_rd_buffer_virt_addr;
-    dma_addr_t rp_rd_buffer_bus_addr = bk_ptr->rp_rd_buffer_bus_addr;
     u8 *rp_wr_buffer_virt_addr = bk_ptr->rp_wr_buffer_virt_addr;
     dma_addr_t rp_wr_buffer_bus_addr = bk_ptr->rp_wr_buffer_bus_addr;
     int loop_count = 0, num_loop_count = 1, simul_read_count, simul_write_count;
@@ -693,16 +691,14 @@ static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_
 u32 rp_tmp, ep_tmp;
     u32 last_id, write_127;
     u32	timeout;
-    u32 r_last_id, w_last_id, r_write_127, w_write_127;
+    u32 w_last_id, w_write_127;
     u32 rand;
     
     struct timeval tv1;
     struct timeval tv2;
     struct timeval diff;
-    atomic_set(&bk_ptr->status, 1);
-    bk_ptr->dma_status.pass_read = 0;     
-    bk_ptr->dma_status.pass_write = 0;     
-    bk_ptr->dma_status.pass_simul = 0;   
+    atomic_set(&bk_ptr->status, 1);     
+    bk_ptr->dma_status.pass_write = 0;        
 
     if(bk_ptr->dma_status.rand){
 	get_random_bytes(&rand, sizeof(rand));
@@ -716,92 +712,15 @@ u32 rp_tmp, ep_tmp;
     	bk_ptr->dma_status.altera_dma_descriptor_num = rand;
     }
 
-    memset(rp_rd_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
     memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
-    init_rp_mem(rp_rd_buffer_virt_addr, bk_ptr->dma_status.altera_dma_num_dwords, 0x00000000, 1);
     init_rp_mem(rp_wr_buffer_virt_addr, bk_ptr->dma_status.altera_dma_num_dwords, 0x00000000, 1);
 
-    bk_ptr->dma_status.read_eplast_timeout = 0;
     bk_ptr->dma_status.write_eplast_timeout = 0;
     
 	if (bk_ptr -> dma_status.onchip)
 		init_ep_mem(bk_ptr, (u64)ONCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, 0x0, 1);
 	else
 		init_ep_mem(bk_ptr, (u64)OFFCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, 0x0, 1);
-
-
-    if(bk_ptr->dma_status.run_read) {
-
-	timeout = TIMEOUT;
-
-	write_127 = 0;
-
-	last_id = ioread32((u32 *)(bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_LAST_PTR));
-
-	set_lite_table_header((struct lite_dma_header *)bk_ptr->lite_table_rd_cpu_virt_addr);
-        wmb();
-        for (i = 0; i < 128/*bk_ptr->dma_status.altera_dma_descriptor_num*/; i++) {
-		if(bk_ptr->dma_status.onchip)
-	            set_read_desc(&bk_ptr->lite_table_rd_cpu_virt_addr->descriptors[i], (dma_addr_t)rp_rd_buffer_bus_addr, (u64)ONCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, i);
-		else
-	            set_read_desc(&bk_ptr->lite_table_rd_cpu_virt_addr->descriptors[i], (dma_addr_t)rp_rd_buffer_bus_addr, (u64)OFFCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, i);
-}
-        iowrite32 ((dma_addr_t)bk_ptr->lite_table_rd_bus_addr, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_RC_LOW_SRC_ADDR);
-        iowrite32 (((dma_addr_t)bk_ptr->lite_table_rd_bus_addr)>>32, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_RC_HIGH_SRC_ADDR);
-	
-	if(last_id == 0xFF){
-	        iowrite32 (RD_CTRL_BUF_BASE_LOW, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_CTLR_LOW_DEST_ADDR);
-        	iowrite32 (RD_CTRL_BUF_BASE_HI, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_CTRL_HIGH_DEST_ADDR);
-	}
-        wmb();
-
-	if(last_id == 0xFF) last_id = 127;
-	
-	last_id = last_id + bk_ptr->dma_status.altera_dma_descriptor_num;
-
-	if(last_id > 127){
-		last_id = last_id - 128;
-		if((bk_ptr->dma_status.altera_dma_descriptor_num > 1) && (last_id != 127)) write_127 = 1;
-	}
-
-	do_gettimeofday(&tv1);  	
-	
-	if(write_127) iowrite32 (127, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_LAST_PTR);
-
-	iowrite32 (last_id, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_LAST_PTR);
-	
-	while (1) {
-                    if (bk_ptr->lite_table_rd_cpu_virt_addr->header.flags[last_id]) {
-                        break;
-                    }
-		    
-		    if(timeout == 0){
-			printk(KERN_DEBUG "Read DMA times out\n");
-			bk_ptr->dma_status.read_eplast_timeout = 1;
-			printk(KERN_DEBUG "DWORD = %08x\n", bk_ptr->dma_status.altera_dma_num_dwords);
-    			printk(KERN_DEBUG "Desc = %08x\n", bk_ptr->dma_status.altera_dma_descriptor_num);
-			break;
-		    }
-
-		    timeout--;
-                    cpu_relax();
-	    }
-
-        do_gettimeofday(&tv2);  
-        diff_timeval(&diff, &tv2, &tv1);
-        bk_ptr->dma_status.read_time = diff; 
-
-	if(timeout == 0){
-		bk_ptr->dma_status.pass_read = 0;
-	}
-	else{
-		if (rp_ep_compare(rp_rd_buffer_virt_addr, bk_ptr, 0, bk_ptr->dma_status.altera_dma_num_dwords)) {
-        	    bk_ptr->dma_status.pass_read = 0;
-        	}
-        	else
-        	    bk_ptr->dma_status.pass_read = 1;
-    		}
-	}
 
     if (bk_ptr->dma_status.run_write) {
 	timeout = TIMEOUT;
@@ -878,126 +797,6 @@ u32 rp_tmp, ep_tmp;
         	    bk_ptr->dma_status.pass_write = 1;   
     	}
     }
-
-    if(bk_ptr->dma_status.run_simul) {
-	timeout = TIMEOUT;
-	r_write_127 = 0;
-	w_write_127 = 0;
-	r_last_id = ioread32((u32 *)(bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_LAST_PTR));
-	w_last_id = ioread32((u32 *)(bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_LAST_PTR));
-
-        set_lite_table_header((struct lite_dma_header *)bk_ptr->lite_table_rd_cpu_virt_addr);
-        set_lite_table_header((struct lite_dma_header *)bk_ptr->lite_table_wr_cpu_virt_addr);
-        memset(rp_rd_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
-        memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
-        init_rp_mem(rp_rd_buffer_virt_addr, bk_ptr->dma_status.altera_dma_num_dwords, 0x00000000, 1);
-	if(bk_ptr->dma_status.onchip)
-	        init_ep_mem(bk_ptr, /*bk_ptr->dma_status.altera_dma_num_dwords*4 + */(u64)ONCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, 0x0, 1);
-	else
-	        init_ep_mem(bk_ptr, /*bk_ptr->dma_status.altera_dma_num_dwords*4 + */(u64)OFFCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, 0x0, 1);
-        wmb();
-
-        for (i = 0; i < 128/*bk_ptr->dma_status.altera_dma_descriptor_num*/; i++) {
-		if(bk_ptr->dma_status.onchip)
-	            set_read_desc(&bk_ptr->lite_table_rd_cpu_virt_addr->descriptors[i], (dma_addr_t)rp_rd_buffer_bus_addr, ONCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, i);
-		else
-		    set_read_desc(&bk_ptr->lite_table_rd_cpu_virt_addr->descriptors[i], (dma_addr_t)rp_rd_buffer_bus_addr, OFFCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, i);
-        }
-
-        for (i = 0; i < 128/*bk_ptr->dma_status.altera_dma_descriptor_num*/; i++) {
-		if(bk_ptr->dma_status.onchip)
-			set_write_desc(&bk_ptr->lite_table_wr_cpu_virt_addr->descriptors[i], ONCHIP_MEM_BASE+4*bk_ptr->dma_status.altera_dma_num_dwords, (dma_addr_t)(rp_wr_buffer_bus_addr), bk_ptr->dma_status.altera_dma_num_dwords, i);
-		else
-	               set_write_desc(&bk_ptr->lite_table_wr_cpu_virt_addr->descriptors[i], OFFCHIP_MEM_BASE+4*bk_ptr->dma_status.altera_dma_num_dwords, (dma_addr_t)(rp_wr_buffer_bus_addr), bk_ptr->dma_status.altera_dma_num_dwords, i);
-		
-        }
-	//Program source read descriptor table lower 32-bit in RC into register thru bar0
-        iowrite32 ((dma_addr_t)bk_ptr->lite_table_rd_bus_addr, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_RC_LOW_SRC_ADDR);
-
-	//Program source read descriptor table upper 32-bit in RC into register thru bar0
-        iowrite32 (((dma_addr_t)bk_ptr->lite_table_rd_bus_addr)>>32, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_RC_HIGH_SRC_ADDR);
-
-	if(r_last_id == 0xFF){
-		//Program destination read descriptor table lower 32-bit in FPGA into register thru bar0
-        	iowrite32 (RD_CTRL_BUF_BASE_LOW, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_CTLR_LOW_DEST_ADDR);
-
-		//Program destination read descriptor table upper 32-bit in FPGA into register thru bar0
-        	iowrite32 (WR_CTRL_BUF_BASE_HI, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_CTRL_HIGH_DEST_ADDR);
-	}
-
-	//Program source write descriptor table lower 32-bit in RC into register thru bar0
-        iowrite32 ((dma_addr_t)bk_ptr->lite_table_wr_bus_addr, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_RC_LOW_SRC_ADDR);
-
-	//Program source write descriptor table upper 32-bit in RC into register thru bar0
-        iowrite32 (((dma_addr_t)bk_ptr->lite_table_wr_bus_addr)>>32, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_RC_HIGH_SRC_ADDR);
-
-	if(w_last_id == 0xFF){
-		//Program destination write descriptor table lower 32-bit in FPGA into register thru bar0
-        	iowrite32 (WR_CTRL_BUF_BASE_LOW, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_CTLR_LOW_DEST_ADDR);
-
-		//Program destination write descriptor table upper 32-bit in FPGA into register thru bar0
-        	iowrite32 (WR_CTRL_BUF_BASE_HI, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_CTRL_HIGH_DEST_ADDR);
-	}
-        wmb();
-
-	if(r_last_id == 0xFF) r_last_id = 127;
-	if(w_last_id == 0xFF) w_last_id = 127;
-	
-	r_last_id = r_last_id + bk_ptr->dma_status.altera_dma_descriptor_num;
-	w_last_id = w_last_id + bk_ptr->dma_status.altera_dma_descriptor_num;
-
-	if(r_last_id > 127){
-		r_last_id = r_last_id - 128;
-		if((bk_ptr->dma_status.altera_dma_descriptor_num > 1) && (r_last_id != 127)) r_write_127 = 1;
-	}
-
-	if(w_last_id > 127){
-		w_last_id = w_last_id - 128;
-		if((bk_ptr->dma_status.altera_dma_descriptor_num > 1) && (w_last_id != 127)) w_write_127 = 1;
-	}
-
-	//Get start time        
-	do_gettimeofday(&tv1);  
-
-	if(r_write_127) iowrite32 (127, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_LAST_PTR);
-	iowrite32 (r_last_id, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_LAST_PTR);
-
-	if(w_write_127) iowrite32 (127, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_LAST_PTR);
-	iowrite32 (w_last_id, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_LAST_PTR);
-		
-	while (1) {
-                    if ((bk_ptr->lite_table_wr_cpu_virt_addr->header.flags[w_last_id]) & (bk_ptr->lite_table_rd_cpu_virt_addr->header.flags[r_last_id])) 		    {
-                        break;
-                    }
-		    
-		    if(timeout == 0){
-			bk_ptr->dma_status.read_eplast_timeout = 1;
-			bk_ptr->dma_status.write_eplast_timeout = 1;
-			printk(KERN_DEBUG "Simultaneous DMA times out\n");
-			printk(KERN_DEBUG "DWORD = %08x\n", bk_ptr->dma_status.altera_dma_num_dwords);
-			printk(KERN_DEBUG "Desc = %08x\n", bk_ptr->dma_status.altera_dma_descriptor_num);
-			break;
-		    }
-
-		    timeout--;
-                    cpu_relax();
-	    }
-	
-        do_gettimeofday(&tv2);  
-        diff_timeval(&diff, &tv2, &tv1);
-        bk_ptr->dma_status.simul_time = diff;
-	if(timeout == 0){
-		bk_ptr->dma_status.pass_simul = 0;
-	}
-	else{
-	       if (rp_ep_compare((u8 *)rp_rd_buffer_virt_addr, bk_ptr, 0, bk_ptr->dma_status.altera_dma_num_dwords) || rp_ep_compare((u8 *)rp_wr_buffer_virt_addr, bk_ptr, bk_ptr->dma_status.altera_dma_num_dwords*4, bk_ptr->dma_status.altera_dma_num_dwords)) {
-        	    bk_ptr->dma_status.pass_simul = 0;
-	        }     
-        	else{
-        	  bk_ptr->dma_status.pass_simul = 1;
-		}
-    	}
-	}
 	
     atomic_set(&bk_ptr->status, 0);
     wake_up(&bk_ptr->wait_q);
@@ -1010,23 +809,19 @@ static int dma_read_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_d
 
     u8 *rp_rd_buffer_virt_addr = bk_ptr->rp_rd_buffer_virt_addr;
     dma_addr_t rp_rd_buffer_bus_addr = bk_ptr->rp_rd_buffer_bus_addr;
-    u8 *rp_wr_buffer_virt_addr = bk_ptr->rp_wr_buffer_virt_addr;
-    dma_addr_t rp_wr_buffer_bus_addr = bk_ptr->rp_wr_buffer_bus_addr;
     int loop_count = 0, num_loop_count = 1, simul_read_count, simul_write_count;
     int i, j;
 u32 rp_tmp, ep_tmp;
     u32 last_id, write_127;
     u32	timeout;
-    u32 r_last_id, w_last_id, r_write_127, w_write_127;
+    u32 r_last_id, r_write_127;
     u32 rand;
     
     struct timeval tv1;
     struct timeval tv2;
     struct timeval diff;
     atomic_set(&bk_ptr->status, 1);
-    bk_ptr->dma_status.pass_read = 0;     
-    bk_ptr->dma_status.pass_write = 0;     
-    bk_ptr->dma_status.pass_simul = 0;   
+    bk_ptr->dma_status.pass_read = 0;        
 
     if(bk_ptr->dma_status.rand){
 	get_random_bytes(&rand, sizeof(rand));
@@ -1041,12 +836,9 @@ u32 rp_tmp, ep_tmp;
     }
 
     memset(rp_rd_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
-    memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
     init_rp_mem(rp_rd_buffer_virt_addr, bk_ptr->dma_status.altera_dma_num_dwords, 0x00000000, 1);
-    init_rp_mem(rp_wr_buffer_virt_addr, bk_ptr->dma_status.altera_dma_num_dwords, 0x00000000, 1);
 
     bk_ptr->dma_status.read_eplast_timeout = 0;
-    bk_ptr->dma_status.write_eplast_timeout = 0;
     
 	if (bk_ptr -> dma_status.onchip)
 		init_ep_mem(bk_ptr, (u64)ONCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, 0x0, 1);
@@ -1125,202 +917,6 @@ u32 rp_tmp, ep_tmp;
         	else
         	    bk_ptr->dma_status.pass_read = 1;
     		}
-	}
-
-    if (bk_ptr->dma_status.run_write) {
-	timeout = TIMEOUT;
-	write_127 = 0;
-	last_id = ioread32((u32 *)(bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_LAST_PTR));
-	//printk(KERN_DEBUG "Read ID = %08x\n", last_id);
-
-        memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
-	
-        set_lite_table_header((struct lite_dma_header *)bk_ptr->lite_table_wr_cpu_virt_addr);
-        wmb();
-        for (i = 0; i < 128/*bk_ptr->dma_status.altera_dma_descriptor_num*/; i++) {
-		if(bk_ptr->dma_status.onchip)      
-		    set_write_desc(&bk_ptr->lite_table_wr_cpu_virt_addr->descriptors[i], ONCHIP_MEM_BASE, (dma_addr_t)rp_wr_buffer_bus_addr, bk_ptr->dma_status.altera_dma_num_dwords, i);
-		else
-			set_write_desc(&bk_ptr->lite_table_wr_cpu_virt_addr->descriptors[i], OFFCHIP_MEM_BASE, (dma_addr_t)rp_wr_buffer_bus_addr, bk_ptr->dma_status.altera_dma_num_dwords, i);
-        }
-
-        iowrite32 ((dma_addr_t)bk_ptr->lite_table_wr_bus_addr, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_RC_LOW_SRC_ADDR);
-        iowrite32 (((dma_addr_t)bk_ptr->lite_table_wr_bus_addr)>>32, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_RC_HIGH_SRC_ADDR);
-	if(last_id == 0xFF){        
-		iowrite32 (WR_CTRL_BUF_BASE_LOW, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_CTLR_LOW_DEST_ADDR);
-        	iowrite32 (WR_CTRL_BUF_BASE_HI, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_CTRL_HIGH_DEST_ADDR);
-	}
-
-        wmb();
-        if(last_id == 0xFF) last_id = 127;
-	
-	last_id = last_id + bk_ptr->dma_status.altera_dma_descriptor_num;
-
-	if(last_id > 127){
-		last_id = last_id - 128;
-		if((bk_ptr->dma_status.altera_dma_descriptor_num > 1) && (last_id != 127)) write_127 = 1;
-	}
-	
-	do_gettimeofday(&tv1);  	
-	
-	if(write_127) iowrite32 (127, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_LAST_PTR);
-
-	iowrite32 (last_id, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_LAST_PTR);
-
-	//printk(KERN_DEBUG "write_127 = %08x\n", write_127);
-	//printk(KERN_DEBUG "Write ID = %08x\n", last_id);
-		
-	while (1) {
-                    if (bk_ptr->lite_table_wr_cpu_virt_addr->header.flags[last_id]) {
-                        break;
-                    }
-		    
-		    if(timeout == 0){
-			bk_ptr->dma_status.write_eplast_timeout = 1;
-			printk(KERN_DEBUG "Write DMA times out\n");
-			printk(KERN_DEBUG "DWORD = %08x\n", bk_ptr->dma_status.altera_dma_num_dwords);
-			printk(KERN_DEBUG "Desc = %08x\n", bk_ptr->dma_status.altera_dma_descriptor_num);
-			break;
-		    }
-
-		    timeout--;
-                    cpu_relax();
-	    }
-	
-        do_gettimeofday(&tv2);  
-        diff_timeval(&diff, &tv2, &tv1);
-        bk_ptr->dma_status.write_time = diff;
-
-	if(timeout == 0){
-		bk_ptr->dma_status.pass_write = 0;
-	}
-	else{
-	        if (rp_ep_compare(rp_wr_buffer_virt_addr, bk_ptr, 0, bk_ptr->dma_status.altera_dma_num_dwords)) {
-        	    bk_ptr->dma_status.pass_write = 0;
-        	}
-        	else
-        	    bk_ptr->dma_status.pass_write = 1;   
-    	}
-    }
-
-    if(bk_ptr->dma_status.run_simul) {
-	timeout = TIMEOUT;
-	r_write_127 = 0;
-	w_write_127 = 0;
-	r_last_id = ioread32((u32 *)(bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_LAST_PTR));
-	w_last_id = ioread32((u32 *)(bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_LAST_PTR));
-
-        set_lite_table_header((struct lite_dma_header *)bk_ptr->lite_table_rd_cpu_virt_addr);
-        set_lite_table_header((struct lite_dma_header *)bk_ptr->lite_table_wr_cpu_virt_addr);
-        memset(rp_rd_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
-        memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
-        init_rp_mem(rp_rd_buffer_virt_addr, bk_ptr->dma_status.altera_dma_num_dwords, 0x00000000, 1);
-	if(bk_ptr->dma_status.onchip)
-	        init_ep_mem(bk_ptr, /*bk_ptr->dma_status.altera_dma_num_dwords*4 + */(u64)ONCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, 0x0, 1);
-	else
-	        init_ep_mem(bk_ptr, /*bk_ptr->dma_status.altera_dma_num_dwords*4 + */(u64)OFFCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, 0x0, 1);
-        wmb();
-
-        for (i = 0; i < 128/*bk_ptr->dma_status.altera_dma_descriptor_num*/; i++) {
-		if(bk_ptr->dma_status.onchip)
-	            set_read_desc(&bk_ptr->lite_table_rd_cpu_virt_addr->descriptors[i], (dma_addr_t)rp_rd_buffer_bus_addr, ONCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, i);
-		else
-		    set_read_desc(&bk_ptr->lite_table_rd_cpu_virt_addr->descriptors[i], (dma_addr_t)rp_rd_buffer_bus_addr, OFFCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, i);
-        }
-
-        for (i = 0; i < 128/*bk_ptr->dma_status.altera_dma_descriptor_num*/; i++) {
-		if(bk_ptr->dma_status.onchip)
-			set_write_desc(&bk_ptr->lite_table_wr_cpu_virt_addr->descriptors[i], ONCHIP_MEM_BASE+4*bk_ptr->dma_status.altera_dma_num_dwords, (dma_addr_t)(rp_wr_buffer_bus_addr), bk_ptr->dma_status.altera_dma_num_dwords, i);
-		else
-	               set_write_desc(&bk_ptr->lite_table_wr_cpu_virt_addr->descriptors[i], OFFCHIP_MEM_BASE+4*bk_ptr->dma_status.altera_dma_num_dwords, (dma_addr_t)(rp_wr_buffer_bus_addr), bk_ptr->dma_status.altera_dma_num_dwords, i);
-		
-        }
-	//Program source read descriptor table lower 32-bit in RC into register thru bar0
-        iowrite32 ((dma_addr_t)bk_ptr->lite_table_rd_bus_addr, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_RC_LOW_SRC_ADDR);
-
-	//Program source read descriptor table upper 32-bit in RC into register thru bar0
-        iowrite32 (((dma_addr_t)bk_ptr->lite_table_rd_bus_addr)>>32, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_RC_HIGH_SRC_ADDR);
-
-	if(r_last_id == 0xFF){
-		//Program destination read descriptor table lower 32-bit in FPGA into register thru bar0
-        	iowrite32 (RD_CTRL_BUF_BASE_LOW, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_CTLR_LOW_DEST_ADDR);
-
-		//Program destination read descriptor table upper 32-bit in FPGA into register thru bar0
-        	iowrite32 (WR_CTRL_BUF_BASE_HI, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_CTRL_HIGH_DEST_ADDR);
-	}
-
-	//Program source write descriptor table lower 32-bit in RC into register thru bar0
-        iowrite32 ((dma_addr_t)bk_ptr->lite_table_wr_bus_addr, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_RC_LOW_SRC_ADDR);
-
-	//Program source write descriptor table upper 32-bit in RC into register thru bar0
-        iowrite32 (((dma_addr_t)bk_ptr->lite_table_wr_bus_addr)>>32, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_RC_HIGH_SRC_ADDR);
-
-	if(w_last_id == 0xFF){
-		//Program destination write descriptor table lower 32-bit in FPGA into register thru bar0
-        	iowrite32 (WR_CTRL_BUF_BASE_LOW, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_CTLR_LOW_DEST_ADDR);
-
-		//Program destination write descriptor table upper 32-bit in FPGA into register thru bar0
-        	iowrite32 (WR_CTRL_BUF_BASE_HI, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_CTRL_HIGH_DEST_ADDR);
-	}
-        wmb();
-
-	if(r_last_id == 0xFF) r_last_id = 127;
-	if(w_last_id == 0xFF) w_last_id = 127;
-	
-	r_last_id = r_last_id + bk_ptr->dma_status.altera_dma_descriptor_num;
-	w_last_id = w_last_id + bk_ptr->dma_status.altera_dma_descriptor_num;
-
-	if(r_last_id > 127){
-		r_last_id = r_last_id - 128;
-		if((bk_ptr->dma_status.altera_dma_descriptor_num > 1) && (r_last_id != 127)) r_write_127 = 1;
-	}
-
-	if(w_last_id > 127){
-		w_last_id = w_last_id - 128;
-		if((bk_ptr->dma_status.altera_dma_descriptor_num > 1) && (w_last_id != 127)) w_write_127 = 1;
-	}
-
-	//Get start time        
-	do_gettimeofday(&tv1);  
-
-	if(r_write_127) iowrite32 (127, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_LAST_PTR);
-	iowrite32 (r_last_id, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_LAST_PTR);
-
-	if(w_write_127) iowrite32 (127, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_LAST_PTR);
-	iowrite32 (w_last_id, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_LAST_PTR);
-		
-	while (1) {
-                    if ((bk_ptr->lite_table_wr_cpu_virt_addr->header.flags[w_last_id]) & (bk_ptr->lite_table_rd_cpu_virt_addr->header.flags[r_last_id])) 		    {
-                        break;
-                    }
-		    
-		    if(timeout == 0){
-			bk_ptr->dma_status.read_eplast_timeout = 1;
-			bk_ptr->dma_status.write_eplast_timeout = 1;
-			printk(KERN_DEBUG "Simultaneous DMA times out\n");
-			printk(KERN_DEBUG "DWORD = %08x\n", bk_ptr->dma_status.altera_dma_num_dwords);
-			printk(KERN_DEBUG "Desc = %08x\n", bk_ptr->dma_status.altera_dma_descriptor_num);
-			break;
-		    }
-
-		    timeout--;
-                    cpu_relax();
-	    }
-	
-        do_gettimeofday(&tv2);  
-        diff_timeval(&diff, &tv2, &tv1);
-        bk_ptr->dma_status.simul_time = diff;
-	if(timeout == 0){
-		bk_ptr->dma_status.pass_simul = 0;
-	}
-	else{
-	       if (rp_ep_compare((u8 *)rp_rd_buffer_virt_addr, bk_ptr, 0, bk_ptr->dma_status.altera_dma_num_dwords) || rp_ep_compare((u8 *)rp_wr_buffer_virt_addr, bk_ptr, bk_ptr->dma_status.altera_dma_num_dwords*4, bk_ptr->dma_status.altera_dma_num_dwords)) {
-        	    bk_ptr->dma_status.pass_simul = 0;
-	        }     
-        	else{
-        	  bk_ptr->dma_status.pass_simul = 1;
-		}
-    	}
 	}
 	
     atomic_set(&bk_ptr->status, 0);
