@@ -64,12 +64,12 @@ void print_menu (char *buf) {
         printf("** %d) enable/disable simul dma              **\n", ALTERA_CMD_ENA_DIS_SIMUL                     );
         printf("** %d) set num dwords (256 - 4096)           **\n", ALTERA_CMD_MODIFY_NUM_DWORDS                 );
         printf("** %d) set num descriptors (1 - 127)         **\n", ALTERA_CMD_MODIFY_NUM_DESC                   );
-		printf("** %d) toggle on-chip or off-chip memory     **\n", ALTERA_CMD_ONCHIP_OFFCHIP			);
+	printf("** %d) toggle on-chip or off-chip memory     **\n", ALTERA_CMD_ONCHIP_OFFCHIP			);
         printf("** %d) loop dma                              **\n", ALTERA_LOOP                                  );
 	//printf("** %d) random				     **\n", ALTERA_CMD_RAND				);
-	// MODIFICATIONS
-		printf("** %d) write single tensor                   **\n", ALTERA_CMD_WRITE_TENSOR			);
-		printf("** %d) read single tensor                    **\n", ALTERA_CMD_READ_TENSOR			);
+		// MODIFICATIONS
+		printf("** %d) write single tensor                   **\n", ALTERA_CMD_WRITE_TENSOR                      );
+		printf("** %d) read single tensor                   **\n", ALTERA_CMD_READ_TENSOR                      );
         printf("** %d) exit                                 **\n", ALTERA_EXIT                                  );
         printf("**********************************************\n");
  	printf("Access On Chip RAM	? %d\n", ((struct dma_status *)buf)->onchip);
@@ -124,26 +124,25 @@ int main () {
         read_line(line, BUFFER_LENGTH, stdin);
         num_input = strtol(line, NULL, 10);
         switch (num_input)
-        {	
-		   // MODIFICATIONS 
-		   case ALTERA_CMD_WRITE_TENSOR:
-		        ioctl(f, ALTERA_IOCX_WRITE_TENSOR);
-                ioctl(f, ALTERA_IOCX_WAIT);
-				cmd.cmd = ALTERA_CMD_READ_STATUS;
-                cmd.buf = buf;
-                write (f, &cmd, 0);
-				break;
-		   case ALTERA_CMD_READ_TENSOR:
-		        ioctl(f, ALTERA_IOCX_READ_TENSOR);
-                ioctl(f, ALTERA_IOCX_WAIT);
-				cmd.cmd = ALTERA_CMD_READ_STATUS;
-                cmd.buf = buf;
-                write (f, &cmd, 0);
-				break;
+        {
            case ALTERA_EXIT:
                 break;
            case ALTERA_CMD_START_DMA:
                 ioctl(f, ALTERA_IOCX_START);
+                ioctl(f, ALTERA_IOCX_WAIT);
+                cmd.cmd = ALTERA_CMD_READ_STATUS;
+                cmd.buf = buf;
+                write (f, &cmd, 0);
+                break;
+			case ALTERA_CMD_WRITE_TENSOR:
+                ioctl(f, ALTERA_IOCX_WRITE_TENSOR);
+                ioctl(f, ALTERA_IOCX_WAIT);
+                cmd.cmd = ALTERA_CMD_READ_STATUS;
+                cmd.buf = buf;
+                write (f, &cmd, 0);
+                break;
+			case ALTERA_CMD_READ_TENSOR:
+                ioctl(f, ALTERA_IOCX_READ_TENSOR);
                 ioctl(f, ALTERA_IOCX_WAIT);
                 cmd.cmd = ALTERA_CMD_READ_STATUS;
                 cmd.buf = buf;
@@ -218,7 +217,7 @@ int main () {
 							print_menu(buf);
 							printf("DMA data error!\n");
 							printf("Type in dmesg to show more details!\n");
-							return 0;
+							return;
 						}
 						system("clear");
 						print_menu(buf);
@@ -241,7 +240,7 @@ int main () {
 							print_menu(buf);
 							printf("DMA data error!\n");
 							printf("Type in dmesg to show more details!\n");
-							return 0;
+							return;
 						}
 						system("clear");
 						print_menu(buf);
