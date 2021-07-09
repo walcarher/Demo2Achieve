@@ -1,0 +1,1 @@
+cmd_/home/chimera/Demo2Achieve/driver/altera_dma.ko := ld -EL -r  -T ./scripts/module-common.lds -T ./arch/arm64/kernel/module.lds --build-id  -o /home/chimera/Demo2Achieve/driver/altera_dma.ko /home/chimera/Demo2Achieve/driver/altera_dma.o /home/chimera/Demo2Achieve/driver/altera_dma.mod.o ;  true
