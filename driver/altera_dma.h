@@ -174,8 +174,10 @@ static int scan_bars(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *de
 static int map_bars(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev) __init;
 static int dma_test(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev);
 // MODIFICATIONS
-static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev);
+static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev, u32 length, u8 *tensor_values);
 static int dma_read_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev);
+static int write_tensor_mem(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 length, u8 *tensor_values);
+u8 * read_tensor_mem(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 length);
 //static irqreturn_t dma_isr(int irq, void *dev_id);
 
 static int altera_pci_probe(struct pci_dev *dev, const struct pci_device_id *id) __init;
@@ -206,6 +208,5 @@ static long altera_dma_ioctl (struct file *filp, unsigned int cmd, unsigned long
 
 // lite
 static int set_lite_table_header(struct lite_dma_header *header);
-
 
 #endif /* _ALTERA_DMA_H */

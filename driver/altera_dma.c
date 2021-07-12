@@ -21,6 +21,9 @@
 
 static long altera_dma_ioctl (struct file *filp, unsigned int cmd, unsigned long arg)
 {
+	// TEST
+	int length = 8;
+	int tensor_values[8] = {1,2,3,4,5,6,7,8};
     struct altera_pcie_dma_bookkeep *bk_ptr = filp->private_data;
     switch (cmd) {
         case ALTERA_IOCX_START:
@@ -28,8 +31,10 @@ static long altera_dma_ioctl (struct file *filp, unsigned int cmd, unsigned long
         case ALTERA_CMD_WAIT_DMA: 
             wait_event_interruptible(bk_ptr->wait_q, !atomic_read(&bk_ptr->status));
 		//MODIFICATIONS
-		case ALTERA_IOCX_WRITE_TENSOR:
-			dma_write_tensor(bk_ptr, bk_ptr->pci_dev);
+		case ALTERA_IOCX_WRITE_TENSOR: 
+			//ERROR HERE
+			dma_write_tensor(bk_ptr, bk_ptr->pci_dev, (u32*)length, *(u32*)tensor_values);
+			//dma_test(bk_ptr, bk_ptr->pci_dev);
 		case ALTERA_IOCX_READ_TENSOR:
 			dma_read_tensor(bk_ptr, bk_ptr->pci_dev);
     }
@@ -347,6 +352,31 @@ static int init_ep_mem(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_off
 	}
 
     return 0;
+}
+
+// MODIFICATIONS
+static int write_tensor_mem(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 length, u8 *tensor_values)
+{
+	u32 i = 0;
+	for (i = 0; i < length; i++) {
+		iowrite8(tensor_values[i], (u32 *)(bk_ptr->bar[BAR]+mem_byte_offset)+i);
+	}
+	return 0;
+}
+
+u8 * read_tensor_mem(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 length)
+{
+	u8 tensor_values[length];
+	u32 i = 0;
+	for (i = 0; i < length; i++) {
+		if (bk_ptr->dma_status.onchip)
+	        tensor_values[i] = ioread8((u32 *)(bk_ptr->bar[BAR]+mem_byte_offset+ONCHIP_MEM_BASE)+i);
+		else
+			tensor_values[i] = ioread8((u32 *)(bk_ptr->bar[BAR]+mem_byte_offset+OFFCHIP_MEM_BASE)+i);
+
+        rmb();
+	}
+	return tensor_values;
 }
 
 static int set_lite_table_header(struct lite_dma_header *header)
@@ -681,10 +711,10 @@ u32 rp_tmp, ep_tmp;
 
 }
 
-static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev)
+static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev, u32 length, u8 *tensor_values)
 {
 
-    u8 *rp_wr_buffer_virt_addr = bk_ptr->rp_wr_buffer_virt_addr;
+    //u8 *rp_wr_buffer_virt_addr = bk_ptr->rp_wr_buffer_virt_addr;
     dma_addr_t rp_wr_buffer_bus_addr = bk_ptr->rp_wr_buffer_bus_addr;
     int loop_count = 0, num_loop_count = 1, simul_read_count, simul_write_count;
     int i, j;
@@ -712,15 +742,17 @@ u32 rp_tmp, ep_tmp;
     	bk_ptr->dma_status.altera_dma_descriptor_num = rand;
     }
 
-    memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
-    init_rp_mem(rp_wr_buffer_virt_addr, bk_ptr->dma_status.altera_dma_num_dwords, 0x00000000, 1);
+    //memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
+    //init_rp_mem(rp_wr_buffer_virt_addr, bk_ptr->dma_status.altera_dma_num_dwords, 0x00000000, 1);
 
     bk_ptr->dma_status.write_eplast_timeout = 0;
     
 	if (bk_ptr -> dma_status.onchip)
-		init_ep_mem(bk_ptr, (u64)ONCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, 0x0, 1);
+		write_tensor_mem(bk_ptr, (u64)ONCHIP_MEM_BASE, length, *tensor_values);
+		//init_ep_mem(bk_ptr, (u64)ONCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, 0x0, 1);
 	else
-		init_ep_mem(bk_ptr, (u64)OFFCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, 0x0, 1);
+		write_tensor_mem(bk_ptr, (u64)OFFCHIP_MEM_BASE, length, *tensor_values);
+		//init_ep_mem(bk_ptr, (u64)OFFCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, 0x0, 1);
 
     if (bk_ptr->dma_status.run_write) {
 	timeout = TIMEOUT;
@@ -728,7 +760,7 @@ u32 rp_tmp, ep_tmp;
 	last_id = ioread32((u32 *)(bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_LAST_PTR));
 	//printk(KERN_DEBUG "Read ID = %08x\n", last_id);
 
-        memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
+        //memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
 	
         set_lite_table_header((struct lite_dma_header *)bk_ptr->lite_table_wr_cpu_virt_addr);
         wmb();
@@ -790,10 +822,10 @@ u32 rp_tmp, ep_tmp;
 		bk_ptr->dma_status.pass_write = 0;
 	}
 	else{
-	        if (rp_ep_compare(rp_wr_buffer_virt_addr, bk_ptr, 0, bk_ptr->dma_status.altera_dma_num_dwords)) {
-        	    bk_ptr->dma_status.pass_write = 0;
-        	}
-        	else
+	        //if (rp_ep_compare(rp_wr_buffer_virt_addr, bk_ptr, 0, bk_ptr->dma_status.altera_dma_num_dwords)) {
+        	//    bk_ptr->dma_status.pass_write = 0;
+        	//}
+        	//else
         	    bk_ptr->dma_status.pass_write = 1;   
     	}
     }

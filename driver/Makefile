@@ -7,7 +7,7 @@ CPPFLAGS += -include $(KERNELDIR)/include/generated/autoconf.h
 
 all:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD)
-
+ 
 install:
 	./altera_dma_load
 
