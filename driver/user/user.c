@@ -54,6 +54,25 @@ char *read_line (char *buf, size_t length, FILE *f)
     return p;
 }
 
+// MODIFICATIONS
+int init_tensor(int length, int *tensor)
+{
+	int i = 0;
+	for (i = 0; i < length; i++) {
+		tensor[i] = i;
+	}
+	return 0;
+}
+
+int print_tensor(int length, int *tensor)
+{
+	int i = 0;
+	for (i = 0; i < length; i++) {
+		printf("Tensor value = %d\n", tensor[i]);
+	}
+	return 0;	
+}
+
 void print_menu (char *buf) {
         printf("\n**********************************************\n");
         printf("** ALTERA 256b DMA driver                   **\n");
@@ -113,6 +132,8 @@ int main () {
     int num_input;
     int i, loop_num;
     int j=1;
+	// MODIFICATIONS
+	int *tensor = malloc(((struct dma_status *)buf)->altera_dma_num_dwords*sizeof(int));
 
     do {
         cmd.cmd = ALTERA_CMD_READ_STATUS;
@@ -134,14 +155,16 @@ int main () {
                 cmd.buf = buf;
                 write (f, &cmd, 0);
                 break;
-			case ALTERA_CMD_WRITE_TENSOR:
-                ioctl(f, ALTERA_IOCX_WRITE_TENSOR);
+			// MODIFICATIONS
+			case ALTERA_CMD_WRITE_TENSOR: ;
+				init_tensor(((struct dma_status *)buf)->altera_dma_num_dwords, tensor);
+                ioctl(f, ALTERA_IOCX_WRITE_TENSOR, tensor);
                 ioctl(f, ALTERA_IOCX_WAIT);
                 cmd.cmd = ALTERA_CMD_READ_STATUS;
                 cmd.buf = buf;
                 write (f, &cmd, 0);
                 break;
-			case ALTERA_CMD_READ_TENSOR:
+			case ALTERA_CMD_READ_TENSOR: 
                 ioctl(f, ALTERA_IOCX_READ_TENSOR);
                 ioctl(f, ALTERA_IOCX_WAIT);
                 cmd.cmd = ALTERA_CMD_READ_STATUS;
@@ -217,7 +240,7 @@ int main () {
 							print_menu(buf);
 							printf("DMA data error!\n");
 							printf("Type in dmesg to show more details!\n");
-							return;
+							return 0;
 						}
 						system("clear");
 						print_menu(buf);
@@ -240,7 +263,7 @@ int main () {
 							print_menu(buf);
 							printf("DMA data error!\n");
 							printf("Type in dmesg to show more details!\n");
-							return;
+							return 0;
 						}
 						system("clear");
 						print_menu(buf);
