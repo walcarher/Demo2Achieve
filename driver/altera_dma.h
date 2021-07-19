@@ -42,7 +42,7 @@
 #define DESC_CTRLLER_BASE               0x0000
 #define CTL_STS_BITS                    0x0100
 #define TIMEOUT_THRESH                  0xFFFF
-#define MAX_NUM_DWORDS                  0xFFFF//0x7FFFF//4096
+#define MAX_NUM_DWORDS                  0x103FF//0xFFFF//0x7FFFF//4096// 65K Max for the TX2
 
 //Arria 10
 #ifdef ARRIA10
@@ -174,10 +174,12 @@ static int scan_bars(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *de
 static int map_bars(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev) __init;
 static int dma_test(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev);
 // MODIFICATIONS
-static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev, u32 length, u8 *tensor_values);
+static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev, int *tensor_values);
 static int dma_read_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev);
-static int write_tensor_mem(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 length, u8 *tensor_values);
-u8 * read_tensor_mem(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 length);
+static int write_tensor_mem(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 num_dwords, u32 *tensor_values);
+u32 * read_tensor_mem(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 length);
+static int init_rp_tensor_mem(u8 *rp_buffer_virt_addr, u32 num_dwords, u32 *tensor_values);
+int print_tensor_kernel(int length, u32 *tensor);
 //static irqreturn_t dma_isr(int irq, void *dev_id);
 
 static int altera_pci_probe(struct pci_dev *dev, const struct pci_device_id *id) __init;
