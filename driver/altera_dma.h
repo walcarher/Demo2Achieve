@@ -174,12 +174,12 @@ static int scan_bars(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *de
 static int map_bars(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev) __init;
 static int dma_test(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev);
 // MODIFICATIONS
-static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev, int *tensor_values);
-static int dma_read_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev);
-static int write_tensor_mem(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 num_dwords, u32 *tensor_values);
-u32 * read_tensor_mem(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 length);
-static int init_rp_tensor_mem(u8 *rp_buffer_virt_addr, u32 num_dwords, u32 *tensor_values);
-int print_tensor_kernel(int length, u32 *tensor);
+static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev, int *tensor);
+static int dma_read_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev, int *tensor);
+static int init_ep_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 num_dwords, u32 *tensor_values);
+static int init_rp_tensor(u8 *rp_buffer_virt_addr, u32 num_dwords, u32 *tensor_values);
+static int print_tensor_kernel(int length, u32 *tensor);
+static int read_tensor_mem(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 num_dwords, u32 **tensor_values);
 //static irqreturn_t dma_isr(int irq, void *dev_id);
 
 static int altera_pci_probe(struct pci_dev *dev, const struct pci_device_id *id) __init;
