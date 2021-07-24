@@ -30,9 +30,9 @@ __attribute__((section("__versions"))) = {
 	{ 0x1000e51, __VMLINUX_SYMBOL_STR(schedule) },
 	{ 0x622598b1, __VMLINUX_SYMBOL_STR(init_wait_entry) },
 	{ 0x79aa04a2, __VMLINUX_SYMBOL_STR(get_random_bytes) },
-	{ 0x4f68e5c9, __VMLINUX_SYMBOL_STR(do_gettimeofday) },
-	{ 0x65345022, __VMLINUX_SYMBOL_STR(__wake_up) },
 	{ 0xdcb764ad, __VMLINUX_SYMBOL_STR(memset) },
+	{ 0x65345022, __VMLINUX_SYMBOL_STR(__wake_up) },
+	{ 0x4f68e5c9, __VMLINUX_SYMBOL_STR(do_gettimeofday) },
 	{ 0x84bc974b, __VMLINUX_SYMBOL_STR(__arch_copy_from_user) },
 	{ 0x88db9f48, __VMLINUX_SYMBOL_STR(__check_object_size) },
 	{ 0xd2b09ce5, __VMLINUX_SYMBOL_STR(__kmalloc) },
@@ -72,4 +72,4 @@ __attribute__((section(".modinfo"))) =
 
 MODULE_ALIAS("pci:v00001172d0000E003sv*sd*bc*sc*i*");
 
-MODULE_INFO(srcversion, "63140603685151CDE54EAB1");
+MODULE_INFO(srcversion, "429654C20F30CC77AC3BC8F");

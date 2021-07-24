@@ -38,15 +38,15 @@
 #define ALTERA_LITE_DMA_WR_LAST_PTR             0x0110
 
 #define ALTERA_EPLAST_DIFF              1
-#define ALTERA_DMA_NUM_DWORDS           512
+#define ALTERA_DMA_NUM_DWORDS           2048
 #define DESC_CTRLLER_BASE               0x0000
 #define CTL_STS_BITS                    0x0100
 #define TIMEOUT_THRESH                  0xFFFF
-#define MAX_NUM_DWORDS                  0x103FF//0xFFFF//0x7FFFF//4096// 65K Max for the TX2
+#define MAX_NUM_DWORDS                  0x0800//0xFFFF//0x7FFFF//4096// 65K Max for the TX2
 
 //Arria 10
 #ifdef ARRIA10
-#warning "Defined ARRIA10 Sucessful"
+#warning "Defined ARRIA10 Sucessfully"
 #define ONCHIP_MEM_BASE                 	0x10000000
 #define ONCHIP_MEM_DESC_MEM_BASE        	0x10000000
 #define OFFCHIP_MEM_BASE			0x00000000
@@ -63,7 +63,8 @@
 //WARNING!!! : DDR3 is disabled for this application. ONLY On-Chip mode is available for higher throughput.
 //NO offset required!!!
 #ifdef CYCLONE10
-#warning "Defined CYCLONE10 Sucessful"
+#pragma message("Defined CYCLONE10 Sucessfully")
+//#warning "Defined CYCLONE10 Sucessfully"
 #define ONCHIP_MEM_BASE             0x00000000 //0x08000000 //0x40000000
 #define ONCHIP_MEM_DESC_MEM_BASE    0x00000000 //0x08000000 //0x40000000
 #define OFFCHIP_MEM_BASE			0x00000000 //0x00000000
@@ -77,7 +78,7 @@
 
 //Stratix 10
 #ifdef STRATIX10
-#warning "Defined STRATIX10 Sucessful"
+#warning "Defined STRATIX10 Sucessfully"
 #define ONCHIP_MEM_BASE                		0x00000000
 #define ONCHIP_MEM_DESC_MEM_BASE        	0x00000000
 #define OFFCHIP_MEM_BASE			0x80000000
@@ -91,7 +92,7 @@
 
 //Stratix V
 #ifdef STRATIXV
-#warning "Defined STRATIXV Sucessful"
+#warning "Defined STRATIXV Sucessfully"
 #define ONCHIP_MEM_BASE                 	0x08000000
 #define ONCHIP_MEM_DESC_MEM_BASE        	0x08000000
 #define OFFCHIP_MEM_BASE			0x00000000
@@ -179,9 +180,9 @@ static int dma_test(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev
 static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev, int *tensor);
 static int dma_read_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev, int *tensor);
 static int init_ep_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 num_dwords, u32 *tensor_values);
-static int init_rp_tensor(u8 *rp_buffer_virt_addr, u32 num_dwords, u32 *tensor_values);
+//static int init_rp_tensor(u8 *rp_buffer_virt_addr, u32 num_dwords, u32 *tensor_values);
 static int print_tensor_kernel(int length, u32 *tensor);
-static int read_tensor(u8 *virt_addr, u32 num_dwords, u32 **tensor_values);
+static int read_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 num_dwords, u32 **tensor_values);
 //static irqreturn_t dma_isr(int irq, void *dev_id);
 
 static int altera_pci_probe(struct pci_dev *dev, const struct pci_device_id *id) __init;
@@ -192,7 +193,6 @@ static int set_read_desc(struct dma_descriptor *rd_desc, dma_addr_t source, u64 
 static int set_write_desc(struct dma_descriptor *wr_desc, u64 source, dma_addr_t dest, u32 ctl_dma_len, u32 id);
 static int scan_bars(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev);
 static int init_rp_mem(u8 *rp_buffer_virt_addr, u32 num_dwords, u32 init_value, u8 increment);
-static int rp_compare(u8 *virt_addr1, u8 *virt_addr2, u32 num_dwords);
 static int rp_ep_compare(u8 *virt_addr, struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 num_dwords);
 //static int print_ep_data(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 num_dwords);
 //static int print_rp_data(u8 *virt_addr, u32 num_dwords);

@@ -32,11 +32,9 @@ static long altera_dma_ioctl (struct file *filp, unsigned int cmd, unsigned long
 		//MODIFICATIONS
 		case ALTERA_IOCX_WRITE_TENSOR: ;
 			dma_write_tensor(bk_ptr, bk_ptr->pci_dev, (int __user *)arg);
-			//dma_test(bk_ptr, bk_ptr->pci_dev);
 			break;
 		case ALTERA_IOCX_READ_TENSOR: ;
 			dma_read_tensor(bk_ptr, bk_ptr->pci_dev, (int __user *)arg);
-			//dma_test(bk_ptr, bk_ptr->pci_dev);
 			break;
     }
     return -EINVAL;
@@ -282,7 +280,6 @@ static int scan_bars(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *de
 static int init_rp_mem(u8 *rp_buffer_virt_addr, u32 num_dwords, u32 init_value, u8 increment)
 {
     u32 i = 0;
-    u32 increment_value = 0;
     u32 tmp_rand;
     for (i = 0; i < num_dwords; i++) {    
 	get_random_bytes(&tmp_rand, sizeof(tmp_rand));
@@ -296,8 +293,7 @@ static int rp_ep_compare(u8 *virt_addr, struct altera_pcie_dma_bookkeep *bk_ptr,
     u32 i = 0;
     u32 rp_data = 0;
     u32 ep_data = 0;
-    u32 j, rp_tmp, ep_tmp;
-    u32 count = 1;
+    u32 j, ep_tmp;
     //printk(KERN_DEBUG "RP                      EP");
     for (i = 0; i < num_dwords; i++) {
 	if (bk_ptr->dma_status.onchip)
@@ -305,10 +301,8 @@ static int rp_ep_compare(u8 *virt_addr, struct altera_pcie_dma_bookkeep *bk_ptr,
 	else
 	 	ep_data = ioread32((u32 *)(bk_ptr->bar[BAR]+mem_byte_offset+OFFCHIP_MEM_BASE)+i);
 
-        rmb();
-        rp_data = *((u32*)virt_addr+i);
-	
-	
+	rmb();
+	rp_data = *((u32*)virt_addr+i);
 	
 	if(ep_data != rp_data){
 		udelay(1000);
@@ -319,18 +313,17 @@ static int rp_ep_compare(u8 *virt_addr, struct altera_pcie_dma_bookkeep *bk_ptr,
 	}
 
         if ( ep_data != rp_data ) {
-		if(bk_ptr->dma_status.onchip)
-		            printk(KERN_DEBUG "%p: 0x%08x != %p: 0x%08x => Data mismatch", (u64 *)((u32*)virt_addr+i), rp_data, (u32 *)(bk_ptr->bar[BAR]+mem_byte_offset+ONCHIP_MEM_BASE)+i, ep_data); 
-		else
-		            printk(KERN_DEBUG "%p: 0x%08x != %p: 0x%08x => Data mismatch", (u64 *)((u32*)virt_addr+i), rp_data, (u32 *)(bk_ptr->bar[BAR]+mem_byte_offset+OFFCHIP_MEM_BASE)+i, ep_data);
-			    printk(KERN_DEBUG "ep_tmp = %08x\n", ep_tmp);
+			if(bk_ptr->dma_status.onchip)
+				printk(KERN_DEBUG "%p: 0x%08x != %p: 0x%08x => Data mismatch", (u64 *)((u32*)virt_addr+i), rp_data, (u32 *)(bk_ptr->bar[BAR]+mem_byte_offset+ONCHIP_MEM_BASE)+i, ep_data); 
+			else
+				printk(KERN_DEBUG "%p: 0x%08x != %p: 0x%08x => Data mismatch", (u64 *)((u32*)virt_addr+i), rp_data, (u32 *)(bk_ptr->bar[BAR]+mem_byte_offset+OFFCHIP_MEM_BASE)+i, ep_data);
 
-	    printk(KERN_DEBUG "MIS-MATCH at offset %08x\n", i);
-		for(j = 0; j < 300; j++){
-			ep_tmp = ioread32((u32 *)(bk_ptr->bar[BAR]+mem_byte_offset+OFFCHIP_MEM_BASE)+i+j);
-			rp_data = *((u32*)virt_addr+i+j);
-			printk(KERN_DEBUG "RP offset %08x = %08x, EP = %08x\n", i+j, rp_data, ep_tmp);
-		}
+			printk(KERN_DEBUG "MIS-MATCH at offset %08x\n", i);
+			for(j = 0; j < 300; j++){
+				ep_tmp = ioread32((u32 *)(bk_ptr->bar[BAR]+mem_byte_offset+OFFCHIP_MEM_BASE)+i+j);
+				rp_data = *((u32*)virt_addr+i+j);
+				printk(KERN_DEBUG "RP offset %08x = %08x, EP = %08x\n", i+j, rp_data, ep_tmp);
+			}
             return 1;
         } else {
             //printk(KERN_DEBUG "%p: 0x%08x == %p: 0x%08x", (u64 *)((u32*)virt_addr+i), rp_data, (u32 *)(bk_ptr->bar[0]+mem_byte_offset+ONCHIP_MEM_BASE)+i, ep_data); 
@@ -356,6 +349,7 @@ static int init_ep_mem(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_off
 }
 
 // MODIFICATIONS
+/*
 static int init_rp_tensor(u8 *rp_buffer_virt_addr, u32 num_dwords, u32 *tensor_values)
 {
     u32 i = 0;
@@ -364,7 +358,7 @@ static int init_rp_tensor(u8 *rp_buffer_virt_addr, u32 num_dwords, u32 *tensor_v
     }
     return 0;
 }
-
+*/
 static int init_ep_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 num_dwords, u32 *tensor_values)
 {
 	u32 i = 0;
@@ -383,11 +377,14 @@ static int print_tensor_kernel(int length, u32 *tensor)
 	return 0;	
 }
 
-static int read_tensor(u8 *virt_addr, u32 num_dwords, u32 **tensor_values)
+static int read_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 num_dwords, u32 **tensor_values)
 {
 	u32 i = 0;
 	for (i = 0; i < num_dwords; i++) {
-		(*tensor_values)[i] = *((u32*)virt_addr+i);
+		if (bk_ptr->dma_status.onchip)
+	        (*tensor_values)[i] = ioread32((u32 *)(bk_ptr->bar[BAR]+mem_byte_offset+ONCHIP_MEM_BASE)+i);
+		else
+			(*tensor_values)[i] = ioread32((u32 *)(bk_ptr->bar[BAR]+mem_byte_offset+OFFCHIP_MEM_BASE)+i);
 	}
 	return 0;
 }
@@ -407,9 +404,7 @@ static int dma_test(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev
     dma_addr_t rp_rd_buffer_bus_addr = bk_ptr->rp_rd_buffer_bus_addr;
     u8 *rp_wr_buffer_virt_addr = bk_ptr->rp_wr_buffer_virt_addr;
     dma_addr_t rp_wr_buffer_bus_addr = bk_ptr->rp_wr_buffer_bus_addr;
-    int loop_count = 0, num_loop_count = 1, simul_read_count, simul_write_count;
-    int i, j;
-u32 rp_tmp, ep_tmp;
+    int i;
     u32 last_id, write_127;
     u32	timeout;
     u32 r_last_id, w_last_id, r_write_127, w_write_127;
@@ -727,40 +722,30 @@ u32 rp_tmp, ep_tmp;
 // MODIFICATIONS
 static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev, int *tensor)
 {
-    u8 *rp_wr_buffer_virt_addr = bk_ptr->rp_wr_buffer_virt_addr;
+	u32 *tensor_values;
+    //u8 *rp_wr_buffer_virt_addr = bk_ptr->rp_wr_buffer_virt_addr;
     dma_addr_t rp_wr_buffer_bus_addr = bk_ptr->rp_wr_buffer_bus_addr;
-    int loop_count = 0, num_loop_count = 1, simul_read_count, simul_write_count;
-    int i, j;
-u32 rp_tmp, ep_tmp;
+    int i;
     u32 last_id, write_127;
     u32	timeout;
-    u32 w_last_id, w_write_127;
-    u32 rand;
+	int cp_to_usr;
     
     struct timeval tv1;
     struct timeval tv2;
     struct timeval diff;
     atomic_set(&bk_ptr->status, 1);     
     bk_ptr->dma_status.pass_write = 0;        
-
-    if(bk_ptr->dma_status.rand){
-	get_random_bytes(&rand, sizeof(rand));
-	rand = rand & 0x3FFFF;
-    	if(rand == 0) rand = 1;
-    	bk_ptr->dma_status.altera_dma_num_dwords = rand;
-    
-    	get_random_bytes(&rand, sizeof(rand));
-    	rand = rand & 0x7F;
-    	if(rand == 0) rand = 1;
-    	bk_ptr->dma_status.altera_dma_descriptor_num = rand;
-    }
 	
 	// MODIFICATIONS
-	u32 *tensor_values = (u32 *)kmalloc(bk_ptr->dma_status.altera_dma_num_dwords*sizeof(u32), GFP_KERNEL);
-	copy_from_user(tensor_values,(u32 *)tensor, bk_ptr->dma_status.altera_dma_num_dwords*sizeof(u32));
+	tensor_values = (u32 *)kmalloc(bk_ptr->dma_status.altera_dma_num_dwords*sizeof(u32), GFP_KERNEL);
+	cp_to_usr = copy_from_user(tensor_values,(u32 *)tensor, bk_ptr->dma_status.altera_dma_num_dwords*sizeof(u32));
+	if (cp_to_usr){
+		printk(KERN_ERR "WRITE: Tensor could not be copied to User Space from Kernel Space\n");
+		return 1;
+	}
 	//print_tensor_kernel(bk_ptr->dma_status.altera_dma_num_dwords, tensor_values);
-    memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
-    init_rp_tensor(rp_wr_buffer_virt_addr, bk_ptr->dma_status.altera_dma_num_dwords, tensor_values);
+    //memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
+    //init_rp_tensor(rp_wr_buffer_virt_addr, bk_ptr->dma_status.altera_dma_num_dwords, tensor_values);
 
     bk_ptr->dma_status.write_eplast_timeout = 0;
     
@@ -777,7 +762,7 @@ u32 rp_tmp, ep_tmp;
 	last_id = ioread32((u32 *)(bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_LAST_PTR));
 	//printk(KERN_DEBUG "Read ID = %08x\n", last_id);
 
-        memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
+        //memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
         set_lite_table_header((struct lite_dma_header *)bk_ptr->lite_table_wr_cpu_virt_addr);
         wmb();
         for (i = 0; i < 128/*bk_ptr->dma_status.altera_dma_descriptor_num*/; i++) {
@@ -834,17 +819,15 @@ u32 rp_tmp, ep_tmp;
         diff_timeval(&diff, &tv2, &tv1);
         bk_ptr->dma_status.write_time = diff;
 
-	if(timeout == 0){
+	if(timeout == 0) {
 		bk_ptr->dma_status.pass_write = 0;
 	}
 	else {
-		if (rp_ep_compare(rp_wr_buffer_virt_addr, bk_ptr, 0, bk_ptr->dma_status.altera_dma_num_dwords)) {
-        	    bk_ptr->dma_status.pass_write = 0;
-        	}
-        else
-        	    bk_ptr->dma_status.pass_write = 1;  
-    }
-    }
+		bk_ptr->dma_status.pass_write = 1;
+		read_tensor(bk_ptr, 0, bk_ptr->dma_status.altera_dma_num_dwords, &tensor_values);
+		print_tensor_kernel(bk_ptr->dma_status.altera_dma_num_dwords, tensor_values);
+	}
+	}
 	
 	kfree(tensor_values);
     atomic_set(&bk_ptr->status, 0);
@@ -855,40 +838,30 @@ u32 rp_tmp, ep_tmp;
 
 static int dma_read_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev, int *tensor)
 {
-    u8 *rp_rd_buffer_virt_addr = bk_ptr->rp_rd_buffer_virt_addr;
+	u32 *tensor_values;
+    //u8 *rp_rd_buffer_virt_addr = bk_ptr->rp_rd_buffer_virt_addr;
     dma_addr_t rp_rd_buffer_bus_addr = bk_ptr->rp_rd_buffer_bus_addr;
-    int loop_count = 0, num_loop_count = 1, simul_read_count, simul_write_count;
-    int i, j;
-	u32 rp_tmp, ep_tmp;
+    int i;
     u32 last_id, write_127;
     u32	timeout;
-    u32 r_last_id, r_write_127;
-    u32 rand;
+	int cp_from_usr;
     
     struct timeval tv1;
     struct timeval tv2;
     struct timeval diff;
     atomic_set(&bk_ptr->status, 1);
     bk_ptr->dma_status.pass_read = 0;        
-
-    if(bk_ptr->dma_status.rand){
-	get_random_bytes(&rand, sizeof(rand));
-	rand = rand & 0x3FFFF;
-    	if(rand == 0) rand = 1;
-    	bk_ptr->dma_status.altera_dma_num_dwords = rand;
-    
-    	get_random_bytes(&rand, sizeof(rand));
-    	rand = rand & 0x7F;
-    	if(rand == 0) rand = 1;
-    	bk_ptr->dma_status.altera_dma_descriptor_num = rand;
-    }
 	
 	// MODIFICATIIONS
-	u32 *tensor_values = (u32 *)kmalloc(bk_ptr->dma_status.altera_dma_num_dwords*sizeof(u32), GFP_KERNEL);
-	copy_from_user(tensor_values,(u32 *)tensor, bk_ptr->dma_status.altera_dma_num_dwords*sizeof(u32));
+	tensor_values = (u32 *)kmalloc(bk_ptr->dma_status.altera_dma_num_dwords*sizeof(u32), GFP_KERNEL);
+	cp_from_usr = copy_from_user(tensor_values,(u32 *)tensor, bk_ptr->dma_status.altera_dma_num_dwords*sizeof(u32));
+	if (cp_from_usr){
+		printk(KERN_ERR "READ: Tensor could not be copied from User Space to Kernel Space\n");
+		return 1;
+	}
 	//print_tensor_kernel(bk_ptr->dma_status.altera_dma_num_dwords, tensor_values);
-	memset(rp_rd_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
-    init_rp_tensor(rp_rd_buffer_virt_addr, bk_ptr->dma_status.altera_dma_num_dwords, tensor_values);
+	//memset(rp_rd_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
+    //init_rp_tensor(rp_rd_buffer_virt_addr, bk_ptr->dma_status.altera_dma_num_dwords, tensor_values);
 
     bk_ptr->dma_status.read_eplast_timeout = 0;
     
@@ -909,16 +882,16 @@ static int dma_read_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_d
 	last_id = ioread32((u32 *)(bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_LAST_PTR));
 
 	set_lite_table_header((struct lite_dma_header *)bk_ptr->lite_table_rd_cpu_virt_addr);
-        wmb();
-        for (i = 0; i < 128/*bk_ptr->dma_status.altera_dma_descriptor_num*/; i++) {
+	wmb();
+	for (i = 0; i < 128/*bk_ptr->dma_status.altera_dma_descriptor_num*/; i++) {
 		if(bk_ptr->dma_status.onchip)
-	            set_read_desc(&bk_ptr->lite_table_rd_cpu_virt_addr->descriptors[i], (dma_addr_t)rp_rd_buffer_bus_addr, (u64)ONCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, i);
+				set_read_desc(&bk_ptr->lite_table_rd_cpu_virt_addr->descriptors[i], (dma_addr_t)rp_rd_buffer_bus_addr, (u64)ONCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, i);
 		else
-	            set_read_desc(&bk_ptr->lite_table_rd_cpu_virt_addr->descriptors[i], (dma_addr_t)rp_rd_buffer_bus_addr, (u64)OFFCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, i);
-}
-        iowrite32 ((dma_addr_t)bk_ptr->lite_table_rd_bus_addr, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_RC_LOW_SRC_ADDR);
-        iowrite32 (((dma_addr_t)bk_ptr->lite_table_rd_bus_addr)>>32, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_RC_HIGH_SRC_ADDR);
-	
+				set_read_desc(&bk_ptr->lite_table_rd_cpu_virt_addr->descriptors[i], (dma_addr_t)rp_rd_buffer_bus_addr, (u64)OFFCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, i);
+	}
+	iowrite32 ((dma_addr_t)bk_ptr->lite_table_rd_bus_addr, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_RC_LOW_SRC_ADDR);
+	iowrite32 (((dma_addr_t)bk_ptr->lite_table_rd_bus_addr)>>32, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_RC_HIGH_SRC_ADDR);
+
 	if(last_id == 0xFF){
 	        iowrite32 (RD_CTRL_BUF_BASE_LOW, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_CTLR_LOW_DEST_ADDR);
         	iowrite32 (RD_CTRL_BUF_BASE_HI, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_CTRL_HIGH_DEST_ADDR);
@@ -961,26 +934,16 @@ static int dma_read_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_d
         diff_timeval(&diff, &tv2, &tv1);
         bk_ptr->dma_status.read_time = diff; 
 
-	if(timeout == 0){
+	if(timeout == 0)
 		bk_ptr->dma_status.pass_read = 0;
-	}
-	else{
-		if (rp_ep_compare(rp_rd_buffer_virt_addr, bk_ptr, 0, bk_ptr->dma_status.altera_dma_num_dwords)) {
-        	    bk_ptr->dma_status.pass_read = 0;
-        	}
-        else {
-				read_tensor(rp_rd_buffer_virt_addr, bk_ptr->dma_status.altera_dma_num_dwords, &tensor_values);
-				print_tensor_kernel(bk_ptr->dma_status.altera_dma_num_dwords, tensor_values);
-        	    bk_ptr->dma_status.pass_read = 1;
-    		}
-	}
+	else
+		bk_ptr->dma_status.pass_read = 1;
 	}
 	
 	kfree(tensor_values);
     atomic_set(&bk_ptr->status, 0);
     wake_up(&bk_ptr->wait_q);
     return 0;
-
 }
 
 static int __init map_bars(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev)
@@ -1150,7 +1113,6 @@ err_bk_alloc:
     dev_err(&dev->dev, "goto err_bk_alloc");
     return rc;
 }
-
 
 static void __exit altera_pci_remove(struct pci_dev *dev)
 {
