@@ -60,15 +60,17 @@
 
 //Cyclone 10
 //This addresses must be modified depending on the on-chip address, off-chip (DDR3) base, BAR0 rd and wr base 
+//WARNING!!! : DDR3 is disabled for this application. ONLY On-Chip mode is available for higher throughput.
+//NO offset required!!!
 #ifdef CYCLONE10
 #warning "Defined CYCLONE10 Sucessful"
-#define ONCHIP_MEM_BASE                 	0x08000000 //0x40000000
-#define ONCHIP_MEM_DESC_MEM_BASE        	0x08000000 //0x40000000
+#define ONCHIP_MEM_BASE             0x00000000 //0x08000000 //0x40000000
+#define ONCHIP_MEM_DESC_MEM_BASE    0x00000000 //0x08000000 //0x40000000
 #define OFFCHIP_MEM_BASE			0x00000000 //0x00000000
-#define RD_CTRL_BUF_BASE_LOW			0x08010000 //0x80000000
-#define RD_CTRL_BUF_BASE_HI			0x08011FFF //0x80001FFF
-#define WR_CTRL_BUF_BASE_LOW			0x08012000 //0x80002000
-#define WR_CTRL_BUF_BASE_HI			0x08013FFF //0x80003FFF
+#define RD_CTRL_BUF_BASE_LOW		0x00010000	//0x08010000 //0x80000000
+#define RD_CTRL_BUF_BASE_HI			0x00011FFF//0x08011FFF //0x80001FFF
+#define WR_CTRL_BUF_BASE_LOW		0x00012000	//0x08012000 //0x80002000
+#define WR_CTRL_BUF_BASE_HI			0x00013FFF//0x08013FFF //0x80003FFF
 #define BAR 2
 #define DMAMASK 64
 #endif
@@ -179,7 +181,7 @@ static int dma_read_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_d
 static int init_ep_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 num_dwords, u32 *tensor_values);
 static int init_rp_tensor(u8 *rp_buffer_virt_addr, u32 num_dwords, u32 *tensor_values);
 static int print_tensor_kernel(int length, u32 *tensor);
-static int read_tensor_mem(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 num_dwords, u32 **tensor_values);
+static int read_tensor(u8 *virt_addr, u32 num_dwords, u32 **tensor_values);
 //static irqreturn_t dma_isr(int irq, void *dev_id);
 
 static int altera_pci_probe(struct pci_dev *dev, const struct pci_device_id *id) __init;

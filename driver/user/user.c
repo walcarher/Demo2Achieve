@@ -60,6 +60,7 @@ int init_tensor(int length, int *tensor)
 	int i = 0;
 	for (i = 0; i < length; i++) {
 		tensor[i] = i;
+		//tensor[i] = 512;
 	}
 	return 0;
 }
@@ -165,7 +166,8 @@ int main () {
                 write (f, &cmd, 0);
                 break;
 			case ALTERA_CMD_READ_TENSOR: 
-                ioctl(f, ALTERA_IOCX_READ_TENSOR);
+				init_tensor(((struct dma_status *)buf)->altera_dma_num_dwords, tensor);
+                ioctl(f, ALTERA_IOCX_READ_TENSOR, tensor);
                 ioctl(f, ALTERA_IOCX_WAIT);
                 cmd.cmd = ALTERA_CMD_READ_STATUS;
                 cmd.buf = buf;
