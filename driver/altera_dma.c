@@ -368,14 +368,14 @@ static int init_ep_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_
 	return 0;
 }
 
-static int print_tensor_kernel(int length, u32 *tensor)
+/* static int print_tensor_kernel(int length, u32 *tensor)
 {
 	u32 i = 0;
 	for (i = 0; i < length; i++) {
 		printk(KERN_DEBUG "Tensor value = %08x\n", tensor[i]);
 	}
 	return 0;	
-}
+} */
 
 static int read_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 num_dwords, u32 **tensor_values)
 {
@@ -725,7 +725,7 @@ static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_
 	u32 *tensor_values;
     u8 *rp_wr_buffer_virt_addr = bk_ptr->rp_wr_buffer_virt_addr;
     dma_addr_t rp_wr_buffer_bus_addr = bk_ptr->rp_wr_buffer_bus_addr;
-    int i;
+    int i, j;
     u32 last_id, write_127;
     u32	timeout;
 	int cp_to_usr;
@@ -735,6 +735,12 @@ static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_
     struct timeval diff;
     atomic_set(&bk_ptr->status, 1);     
     bk_ptr->dma_status.pass_write = 0;        
+	
+	//MODIFICATIONS
+	tensor_values = (u32 *)kmalloc(bk_ptr->dma_status.altera_dma_num_dwords*sizeof(u32), GFP_KERNEL);
+	for (j = 0; j < bk_ptr->dma_status.altera_dma_num_dwords; j++) {
+		tensor_values[j] = 0;
+	}
 	
     memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
 
@@ -808,9 +814,8 @@ static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_
 	}
 	else {
 		// MODIFICATIONS
-		tensor_values = (u32 *)kmalloc(bk_ptr->dma_status.altera_dma_num_dwords*sizeof(u32), GFP_KERNEL);
 		read_tensor(bk_ptr, 0, bk_ptr->dma_status.altera_dma_num_dwords, &tensor_values);
-		print_tensor_kernel(bk_ptr->dma_status.altera_dma_num_dwords, tensor_values);
+		//print_tensor_kernel(bk_ptr->dma_status.altera_dma_num_dwords, tensor_values);
 		cp_to_usr = copy_to_user(tensor, (int *)tensor_values, bk_ptr->dma_status.altera_dma_num_dwords*sizeof(u32));
 		if (cp_to_usr){
 			printk(KERN_ERR "WRITE: Tensor could not be copied to User Space from Kernel Space\n");

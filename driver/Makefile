@@ -3,7 +3,7 @@ obj-m	:= altera_dma.o
 KERNELDIR ?= /lib/modules/$(shell uname -r)/build
 PWD       := $(shell pwd)
 
-CPPFLAGS += -include $(KERNELDIR)/include/generated/autoconf.h
+CPPFLAGS += -include $(KERNELDIR)/include/generated/autoconf.h 
 
 all:
 	$(MAKE) -C $(KERNELDIR) M=$(PWD)

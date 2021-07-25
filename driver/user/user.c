@@ -161,7 +161,7 @@ int main () {
 				init_tensor(((struct dma_status *)buf)->altera_dma_num_dwords, tensor);
                 ioctl(f, ALTERA_IOCX_WRITE_TENSOR, tensor);
                 ioctl(f, ALTERA_IOCX_WAIT);
-				print_tensor(((struct dma_status *)buf)->altera_dma_num_dwords, tensor);
+				//print_tensor(((struct dma_status *)buf)->altera_dma_num_dwords, tensor);
                 cmd.cmd = ALTERA_CMD_READ_STATUS;
                 cmd.buf = buf;
                 write (f, &cmd, 0);

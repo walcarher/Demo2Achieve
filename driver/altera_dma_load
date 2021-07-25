@@ -11,12 +11,17 @@ rm -f /dev/$device
 
 # create new device node
 major=`grep -w $module /proc/devices | cut -f1 -d" "`
-echo "major='$major'"
-mknod /dev/$device c $major 0
-
-# change permissions to allow all users to read/write
-chmod $mode /dev/$device
-
-# make user program
-rm -f ./user/user
-gcc ./user/user.c -o ./user/user
+if [ -n "${major}" ];
+then
+	mknod /dev/$device c $major 0
+	# change permissions to allow all users to read/write
+	chmod $mode /dev/$device
+	# make user program
+	rm -f ./user/user
+	gcc ./user/user.c -o ./user/user
+	echo "Driver Module Installation was Successful"
+else
+	echo "ERROR: Driver Module Installation Failed"
+	echo "MESSAGE: Verify that PCI Altera Accelerator is mapped with 'sudo lspci'"
+	echo "MESSAGE: Run 'dmesg' for more information"
+fi
