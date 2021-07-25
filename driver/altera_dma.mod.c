@@ -24,15 +24,15 @@ __attribute__((section("__versions"))) = {
 	{ 0x59253af, __VMLINUX_SYMBOL_STR(module_layout) },
 	{ 0x35b3df96, __VMLINUX_SYMBOL_STR(pci_unregister_driver) },
 	{ 0x2e3cb253, __VMLINUX_SYMBOL_STR(__pci_register_driver) },
-	{ 0xb35dea8f, __VMLINUX_SYMBOL_STR(__arch_copy_to_user) },
 	{ 0x9c5bc552, __VMLINUX_SYMBOL_STR(finish_wait) },
 	{ 0xcb128141, __VMLINUX_SYMBOL_STR(prepare_to_wait_event) },
 	{ 0x1000e51, __VMLINUX_SYMBOL_STR(schedule) },
 	{ 0x622598b1, __VMLINUX_SYMBOL_STR(init_wait_entry) },
+	{ 0xb35dea8f, __VMLINUX_SYMBOL_STR(__arch_copy_to_user) },
 	{ 0x79aa04a2, __VMLINUX_SYMBOL_STR(get_random_bytes) },
-	{ 0xdcb764ad, __VMLINUX_SYMBOL_STR(memset) },
 	{ 0x65345022, __VMLINUX_SYMBOL_STR(__wake_up) },
 	{ 0x4f68e5c9, __VMLINUX_SYMBOL_STR(do_gettimeofday) },
+	{ 0xdcb764ad, __VMLINUX_SYMBOL_STR(memset) },
 	{ 0x84bc974b, __VMLINUX_SYMBOL_STR(__arch_copy_from_user) },
 	{ 0x88db9f48, __VMLINUX_SYMBOL_STR(__check_object_size) },
 	{ 0xd2b09ce5, __VMLINUX_SYMBOL_STR(__kmalloc) },
@@ -72,4 +72,4 @@ __attribute__((section(".modinfo"))) =
 
 MODULE_ALIAS("pci:v00001172d0000E003sv*sd*bc*sc*i*");
 
-MODULE_INFO(srcversion, "429654C20F30CC77AC3BC8F");
+MODULE_INFO(srcversion, "3878514BDFFE5204A57624C");

@@ -30,10 +30,12 @@ static long altera_dma_ioctl (struct file *filp, unsigned int cmd, unsigned long
             wait_event_interruptible(bk_ptr->wait_q, !atomic_read(&bk_ptr->status));
 			break;
 		//MODIFICATIONS
-		case ALTERA_IOCX_WRITE_TENSOR: ;
+		// Writes Tensor from FPGA to CPU/GPU
+		case ALTERA_IOCX_WRITE_TENSOR: 
 			dma_write_tensor(bk_ptr, bk_ptr->pci_dev, (int __user *)arg);
 			break;
-		case ALTERA_IOCX_READ_TENSOR: ;
+		// Reads Tensor from CPU/GPU to FPGA
+		case ALTERA_IOCX_READ_TENSOR: 
 			dma_read_tensor(bk_ptr, bk_ptr->pci_dev, (int __user *)arg);
 			break;
     }
@@ -349,7 +351,6 @@ static int init_ep_mem(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_off
 }
 
 // MODIFICATIONS
-/*
 static int init_rp_tensor(u8 *rp_buffer_virt_addr, u32 num_dwords, u32 *tensor_values)
 {
     u32 i = 0;
@@ -358,7 +359,6 @@ static int init_rp_tensor(u8 *rp_buffer_virt_addr, u32 num_dwords, u32 *tensor_v
     }
     return 0;
 }
-*/
 static int init_ep_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, u32 mem_byte_offset, u32 num_dwords, u32 *tensor_values)
 {
 	u32 i = 0;
@@ -723,7 +723,7 @@ static int dma_test(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev
 static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev, int *tensor)
 {
 	u32 *tensor_values;
-    //u8 *rp_wr_buffer_virt_addr = bk_ptr->rp_wr_buffer_virt_addr;
+    u8 *rp_wr_buffer_virt_addr = bk_ptr->rp_wr_buffer_virt_addr;
     dma_addr_t rp_wr_buffer_bus_addr = bk_ptr->rp_wr_buffer_bus_addr;
     int i;
     u32 last_id, write_127;
@@ -736,51 +736,35 @@ static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_
     atomic_set(&bk_ptr->status, 1);     
     bk_ptr->dma_status.pass_write = 0;        
 	
-	// MODIFICATIONS
-	tensor_values = (u32 *)kmalloc(bk_ptr->dma_status.altera_dma_num_dwords*sizeof(u32), GFP_KERNEL);
-	cp_to_usr = copy_from_user(tensor_values,(u32 *)tensor, bk_ptr->dma_status.altera_dma_num_dwords*sizeof(u32));
-	if (cp_to_usr){
-		printk(KERN_ERR "WRITE: Tensor could not be copied to User Space from Kernel Space\n");
-		return 1;
-	}
-	//print_tensor_kernel(bk_ptr->dma_status.altera_dma_num_dwords, tensor_values);
-    //memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
-    //init_rp_tensor(rp_wr_buffer_virt_addr, bk_ptr->dma_status.altera_dma_num_dwords, tensor_values);
+    memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
 
     bk_ptr->dma_status.write_eplast_timeout = 0;
     
-	if (bk_ptr -> dma_status.onchip)
-		init_ep_tensor(bk_ptr, (u64)ONCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, tensor_values);
-		//init_ep_mem(bk_ptr, (u64)ONCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, 0x0, 1);
-	else
-		init_ep_tensor(bk_ptr, (u64)OFFCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, tensor_values);
-		//init_ep_mem(bk_ptr, (u64)OFFCHIP_MEM_BASE, bk_ptr->dma_status.altera_dma_num_dwords, 0x0, 1);
-
     if (bk_ptr->dma_status.run_write) {
 	timeout = TIMEOUT;
 	write_127 = 0;
 	last_id = ioread32((u32 *)(bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_LAST_PTR));
 	//printk(KERN_DEBUG "Read ID = %08x\n", last_id);
 
-        //memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
-        set_lite_table_header((struct lite_dma_header *)bk_ptr->lite_table_wr_cpu_virt_addr);
-        wmb();
-        for (i = 0; i < 128/*bk_ptr->dma_status.altera_dma_descriptor_num*/; i++) {
-		if(bk_ptr->dma_status.onchip)      
-		    set_write_desc(&bk_ptr->lite_table_wr_cpu_virt_addr->descriptors[i], ONCHIP_MEM_BASE, (dma_addr_t)rp_wr_buffer_bus_addr, bk_ptr->dma_status.altera_dma_num_dwords, i);
-		else
-			set_write_desc(&bk_ptr->lite_table_wr_cpu_virt_addr->descriptors[i], OFFCHIP_MEM_BASE, (dma_addr_t)rp_wr_buffer_bus_addr, bk_ptr->dma_status.altera_dma_num_dwords, i);
-        }
-
-        iowrite32 ((dma_addr_t)bk_ptr->lite_table_wr_bus_addr, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_RC_LOW_SRC_ADDR);
-        iowrite32 (((dma_addr_t)bk_ptr->lite_table_wr_bus_addr)>>32, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_RC_HIGH_SRC_ADDR);
-	if(last_id == 0xFF){        
-		iowrite32 (WR_CTRL_BUF_BASE_LOW, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_CTLR_LOW_DEST_ADDR);
-        	iowrite32 (WR_CTRL_BUF_BASE_HI, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_CTRL_HIGH_DEST_ADDR);
+	memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
+	set_lite_table_header((struct lite_dma_header *)bk_ptr->lite_table_wr_cpu_virt_addr);
+	wmb();
+	for (i = 0; i < 128/*bk_ptr->dma_status.altera_dma_descriptor_num*/; i++) {
+	if(bk_ptr->dma_status.onchip)      
+		set_write_desc(&bk_ptr->lite_table_wr_cpu_virt_addr->descriptors[i], ONCHIP_MEM_BASE, (dma_addr_t)rp_wr_buffer_bus_addr, bk_ptr->dma_status.altera_dma_num_dwords, i);
+	else
+		set_write_desc(&bk_ptr->lite_table_wr_cpu_virt_addr->descriptors[i], OFFCHIP_MEM_BASE, (dma_addr_t)rp_wr_buffer_bus_addr, bk_ptr->dma_status.altera_dma_num_dwords, i);
 	}
 
-        wmb();
-        if(last_id == 0xFF) last_id = 127;
+	iowrite32 ((dma_addr_t)bk_ptr->lite_table_wr_bus_addr, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_RC_LOW_SRC_ADDR);
+	iowrite32 (((dma_addr_t)bk_ptr->lite_table_wr_bus_addr)>>32, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_RC_HIGH_SRC_ADDR);
+	if(last_id == 0xFF){        
+		iowrite32 (WR_CTRL_BUF_BASE_LOW, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_CTLR_LOW_DEST_ADDR);
+		iowrite32 (WR_CTRL_BUF_BASE_HI, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_CTRL_HIGH_DEST_ADDR);
+	}
+
+	wmb();
+	if(last_id == 0xFF) last_id = 127;
 	
 	last_id = last_id + bk_ptr->dma_status.altera_dma_descriptor_num;
 
@@ -812,7 +796,7 @@ static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_
 		    }
 
 		    timeout--;
-                    cpu_relax();
+            cpu_relax();
 	    }
 	
         do_gettimeofday(&tv2);  
@@ -823,9 +807,16 @@ static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_
 		bk_ptr->dma_status.pass_write = 0;
 	}
 	else {
-		bk_ptr->dma_status.pass_write = 1;
+		// MODIFICATIONS
+		tensor_values = (u32 *)kmalloc(bk_ptr->dma_status.altera_dma_num_dwords*sizeof(u32), GFP_KERNEL);
 		read_tensor(bk_ptr, 0, bk_ptr->dma_status.altera_dma_num_dwords, &tensor_values);
 		print_tensor_kernel(bk_ptr->dma_status.altera_dma_num_dwords, tensor_values);
+		cp_to_usr = copy_to_user(tensor, (int *)tensor_values, bk_ptr->dma_status.altera_dma_num_dwords*sizeof(u32));
+		if (cp_to_usr){
+			printk(KERN_ERR "WRITE: Tensor could not be copied to User Space from Kernel Space\n");
+			return 1;
+		}
+		bk_ptr->dma_status.pass_write = 1;
 	}
 	}
 	
@@ -839,7 +830,7 @@ static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_
 static int dma_read_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_dev *dev, int *tensor)
 {
 	u32 *tensor_values;
-    //u8 *rp_rd_buffer_virt_addr = bk_ptr->rp_rd_buffer_virt_addr;
+    u8 *rp_rd_buffer_virt_addr = bk_ptr->rp_rd_buffer_virt_addr;
     dma_addr_t rp_rd_buffer_bus_addr = bk_ptr->rp_rd_buffer_bus_addr;
     int i;
     u32 last_id, write_127;
@@ -860,8 +851,8 @@ static int dma_read_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_d
 		return 1;
 	}
 	//print_tensor_kernel(bk_ptr->dma_status.altera_dma_num_dwords, tensor_values);
-	//memset(rp_rd_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
-    //init_rp_tensor(rp_rd_buffer_virt_addr, bk_ptr->dma_status.altera_dma_num_dwords, tensor_values);
+	memset(rp_rd_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
+    init_rp_tensor(rp_rd_buffer_virt_addr, bk_ptr->dma_status.altera_dma_num_dwords, tensor_values);
 
     bk_ptr->dma_status.read_eplast_timeout = 0;
     
@@ -893,8 +884,8 @@ static int dma_read_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_d
 	iowrite32 (((dma_addr_t)bk_ptr->lite_table_rd_bus_addr)>>32, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_RC_HIGH_SRC_ADDR);
 
 	if(last_id == 0xFF){
-	        iowrite32 (RD_CTRL_BUF_BASE_LOW, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_CTLR_LOW_DEST_ADDR);
-        	iowrite32 (RD_CTRL_BUF_BASE_HI, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_CTRL_HIGH_DEST_ADDR);
+	    iowrite32 (RD_CTRL_BUF_BASE_LOW, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_CTLR_LOW_DEST_ADDR);
+		iowrite32 (RD_CTRL_BUF_BASE_HI, bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_RD_CTRL_HIGH_DEST_ADDR);
 	}
         wmb();
 
@@ -1216,7 +1207,10 @@ static int diff_timeval(struct timeval *result, struct timeval *t2, struct timev
 module_init(altera_dma_init);
 module_exit(altera_dma_exit);
 
-MODULE_AUTHOR("Michael Chen <micchen@altera.com>");
+// Based on the original reference driver from Intel(R) Altera coded by:
+// MODULE_AUTHOR("Michael Chen <micchen@altera.com>");
+// Modifications for PyTorch integration and C wrapper coded by 
+MODULE_AUTHOR("Walther Carballo-Hernández <walther.carballo_hernandez@uca.fr>");
 MODULE_DESCRIPTION("256b DMA Driver");
 MODULE_VERSION(ALTERA_DMA_DRIVER_VERSION);
 MODULE_LICENSE("Dual BSD/GPL");
