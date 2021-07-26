@@ -1,0 +1,7 @@
+README.md
+setup.py
+chimera_lib.egg-info/PKG-INFO
+chimera_lib.egg-info/SOURCES.txt
+chimera_lib.egg-info/dependency_links.txt
+chimera_lib.egg-info/top_level.txt
+src/chimera_lib.cpp
