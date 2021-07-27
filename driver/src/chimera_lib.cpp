@@ -59,7 +59,8 @@ int * read_from_fpga_raw(int *tensor)
 
 int write_to_fpga(torch::Tensor torch_tensor)
 {
-	if (torch_tensor.is_cpu()) {
+	if (torch_tensor.device().is_cpu()) 
+	{
 		auto tensor_acc = torch_tensor.accessor<int,3>();
 		int C = tensor_acc.size(0);
 		int H = tensor_acc.size(1);
@@ -78,7 +79,7 @@ int write_to_fpga(torch::Tensor torch_tensor)
 		write_to_fpga_raw(tensor);
 		return 0;
 	} else {
-		printf("Only Tensors on CPU are supported");
+		//torch_tensor.to(torch::kCPU);
 		return 1;
 	}
 }

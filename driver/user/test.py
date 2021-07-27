@@ -30,9 +30,9 @@ class FPGA_COMM(torch.autograd.Function):
 comm = FPGA_COMM()
 # Open FPGA Device
 comm.open()
+#for i in range (100):
 # Start random Integer tensor (Range 0x0 to max signed integer value 0x7FFFFFFF)
-input = torch.randint(2147483647,(8,16,16), dtype = torch.int32)
-print(input.size())
+input = torch.randint(2147483647,(8,16,16), dtype = torch.int32, device = "cpu")
 # Write tensor to On-Chip memory on FPGA
 print("Write random Int32 tensor with values between 0-0x7FFFFFFF")
 start = time.time()
@@ -40,7 +40,7 @@ comm.write(input)
 elapsed = time.time() - start
 print("Write elapsed time:", elapsed*1000, " ms")
 # Initialize empty tensor with a given dimension and size
-output = torch.empty((8,16,16), dtype = torch.int32)
+output = torch.empty((8,16,16), dtype = torch.int32, device = "cpu")
 # Read tensor from On-Chip memory from FPGA as Integer32
 print("Read Int32 tensor with values0x7FFFFFFF")
 start = time.time()
