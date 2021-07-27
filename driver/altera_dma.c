@@ -725,7 +725,7 @@ static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_
 	u32 *tensor_values;
     u8 *rp_wr_buffer_virt_addr = bk_ptr->rp_wr_buffer_virt_addr;
     dma_addr_t rp_wr_buffer_bus_addr = bk_ptr->rp_wr_buffer_bus_addr;
-    int i, j;
+    int i;
     u32 last_id, write_127;
     u32	timeout;
 	int cp_to_usr;
@@ -738,9 +738,6 @@ static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_
 	
 	//MODIFICATIONS
 	tensor_values = (u32 *)kmalloc(bk_ptr->dma_status.altera_dma_num_dwords*sizeof(u32), GFP_KERNEL);
-	for (j = 0; j < bk_ptr->dma_status.altera_dma_num_dwords; j++) {
-		tensor_values[j] = 0;
-	}
 	
     memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
 
@@ -752,7 +749,7 @@ static int dma_write_tensor(struct altera_pcie_dma_bookkeep *bk_ptr, struct pci_
 	last_id = ioread32((u32 *)(bk_ptr->bar[0]+DESC_CTRLLER_BASE+ALTERA_LITE_DMA_WR_LAST_PTR));
 	//printk(KERN_DEBUG "Read ID = %08x\n", last_id);
 
-	memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
+	//memset(rp_wr_buffer_virt_addr, 0, bk_ptr->dma_status.altera_dma_num_dwords*4);
 	set_lite_table_header((struct lite_dma_header *)bk_ptr->lite_table_wr_cpu_virt_addr);
 	wmb();
 	for (i = 0; i < 128/*bk_ptr->dma_status.altera_dma_descriptor_num*/; i++) {

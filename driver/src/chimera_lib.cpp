@@ -45,7 +45,7 @@ int write_to_fpga_raw(int *tensor)
 	return 0;
 }
 
-int read_from_fpga_raw(int *tensor)
+int * read_from_fpga_raw(int *tensor)
 {
 	// Writes Tensor from FPGA to CPU/GPU
 	ioctl(f, ALTERA_IOCX_WRITE_TENSOR, tensor);
@@ -53,7 +53,42 @@ int read_from_fpga_raw(int *tensor)
 	cmd.cmd = ALTERA_CMD_READ_STATUS;
 	cmd.buf = buf;
 	write (f, &cmd, 0);
-	return 0;
+	return tensor;
+}
+
+
+int write_to_fpga(torch::Tensor torch_tensor)
+{
+	if (torch_tensor.is_cpu()) {
+		auto tensor_acc = torch_tensor.accessor<int,3>();
+		int C = tensor_acc.size(0);
+		int H = tensor_acc.size(1);
+		int W = tensor_acc.size(2);
+		int h, w, c;
+		
+		for (h = 0; h < H; h++) {
+			for (w = 0; w < W; w++) {
+				for (c = 0; c < C; c++) {
+				// Index unrolling
+				tensor[c+w*C+h*C*W] = tensor_acc[c][h][w];
+				}
+			}
+		} 
+		//init_tensor(((struct dma_status *)buf)->altera_dma_num_dwords, tensor);
+		write_to_fpga_raw(tensor);
+		return 0;
+	} else {
+		printf("Only Tensors on CPU are supported");
+		return 1;
+	}
+}
+
+torch::Tensor read_from_fpga(torch::Tensor torch_tensor)
+{
+	tensor = read_from_fpga_raw(tensor);
+	//print_tensor(((struct dma_status *)buf)->altera_dma_num_dwords, tensor);
+	torch_tensor = torch::from_blob(tensor, {torch_tensor.size(0),torch_tensor.size(1),torch_tensor.size(2)}, torch::dtype(torch::kInt32));
+	return torch_tensor;
 }
 
 int init_tensor(int length, int *tensor)
@@ -66,30 +101,13 @@ int init_tensor(int length, int *tensor)
 	return 0;
 }
 
-int write_to_fpga(torch::Tensor torch_tensor)
+int print_tensor(int length, int *tensor)
 {
-	auto tensor_acc = torch_tensor.accessor<int,3>();
-	int C = tensor_acc.size(0);
-	int H = tensor_acc.size(1);
-	int W = tensor_acc.size(2);
-	int h, w, c;
-	
-	for (h = 0; h < H; h++) {
-		for (w = 0; w < W; w++) {
-			for (c = 0; c < C; c++) {
-			// Index unrolling
-			tensor[c+w*C+h*C*W] = tensor_acc[c][h][w];
-			}
-		}
-	} 
-	//init_tensor(((struct dma_status *)buf)->altera_dma_num_dwords, tensor);
-	write_to_fpga_raw(tensor);
-	return 0;
-}
-
-int read_from_fpga(torch::Tensor tensor)
-{
-	return 0;
+	int i = 0;
+	for (i = 0; i < length; i++) {
+		printf("Tensor value = %d\n", tensor[i]);
+	}
+	return 0;	
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
