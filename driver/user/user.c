@@ -12,6 +12,8 @@
 
 #define BUFFER_LENGTH 40
 
+#include <sys/time.h>
+
 int kbhit(void)
 {
 	struct termios oldt, newt;
@@ -135,7 +137,8 @@ int main () {
     int j=1;
 	// MODIFICATIONS
 	int *tensor = malloc(((struct dma_status *)buf)->altera_dma_num_dwords*sizeof(int));
-
+	struct timeval stop, start;
+	
     do {
         cmd.cmd = ALTERA_CMD_READ_STATUS;
         cmd.buf = buf;
@@ -159,8 +162,11 @@ int main () {
 			// MODIFICATIONS
 			case ALTERA_CMD_WRITE_TENSOR: ;
 				init_tensor(((struct dma_status *)buf)->altera_dma_num_dwords, tensor);
-                ioctl(f, ALTERA_IOCX_WRITE_TENSOR, tensor);
+                gettimeofday(&start, NULL);
+				ioctl(f, ALTERA_IOCX_WRITE_TENSOR, tensor);
                 ioctl(f, ALTERA_IOCX_WAIT);
+				gettimeofday(&stop, NULL);
+				//printf("took %lu us\n", (stop.tv_sec - start.tv_sec) * 1000000 + stop.tv_usec - start.tv_usec);
 				//print_tensor(((struct dma_status *)buf)->altera_dma_num_dwords, tensor);
                 cmd.cmd = ALTERA_CMD_READ_STATUS;
                 cmd.buf = buf;
@@ -168,8 +174,11 @@ int main () {
                 break;
 			case ALTERA_CMD_READ_TENSOR: 
 				init_tensor(((struct dma_status *)buf)->altera_dma_num_dwords, tensor);
-                ioctl(f, ALTERA_IOCX_READ_TENSOR, tensor);
+                gettimeofday(&start, NULL);
+				ioctl(f, ALTERA_IOCX_READ_TENSOR, tensor);
                 ioctl(f, ALTERA_IOCX_WAIT);
+				gettimeofday(&stop, NULL);
+				//printf("took %lu us\n", (stop.tv_sec - start.tv_sec) * 1000000 + stop.tv_usec - start.tv_usec);
                 cmd.cmd = ALTERA_CMD_READ_STATUS;
                 cmd.buf = buf;
                 write (f, &cmd, 0);
