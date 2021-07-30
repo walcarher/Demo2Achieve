@@ -73,7 +73,7 @@ int main(int argc, char **argv) {
 	//cudaMemcpy(h_b, d_b, nbytes, cudaMemcpyDeviceToHost); 
 	
 	// No need to DtoH transfer 
-	//for (unsigned int i = 0; i < isize; i++) printf("%1.2f %1.2f\n", h_b[i],  d_b[i]);
+	for (unsigned int i = 0; i < isize; i++) printf("%1.2f %1.2f\n", h_b[i],  d_b[i]);
 
 	// Free memory on host and device
 	cudaFreeHost(h_b);

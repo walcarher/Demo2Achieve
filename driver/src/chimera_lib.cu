@@ -84,19 +84,20 @@ int read_status(){
 	return 0;
 }
 
-__global__ void read_from_gpu(torch::PackedTensorAccessor32<int, 4, torch::RestrictPtrTraits> accessor, int** tensor){
-			//int C = accesor.size(1);
-			//int H = accesor.size(2);
-			//int W = accessor.size(3);
-			int tid = threadIdx.x + blockIdx.x*blockDim.x;
-			(*tensor)[tid] = accessor[0][0][0][0];
+__global__ void read_from_gpu(torch::PackedTensorAccessor64<int, 4> accessor, int** tensor){
+	//int C = accesor.size(1);
+	//int H = accesor.size(2);
+	//int W = accessor.size(3);
+	int tid = threadIdx.x + blockIdx.x*blockDim.x;
+	(*tensor)[tid] = accessor[0][0][0][0];
+	printf("Index %d\n with value", tid, accessor[0][0][0][0]);
 }
 
 __global__ void packed_accessor_kernel(
     torch::PackedTensorAccessor64<float, 1> foo,
-    float trace) {
-	int i=threadIdx.x;
-	trace = foo[i];
+    float* trace) {
+	int i = blockIdx.x*blockDim.x+threadIdx.x;
+	trace[i] = foo[i];
 }
 
 int write_to_fpga(torch::Tensor torch_tensor)
@@ -137,26 +138,35 @@ int write_to_fpga(torch::Tensor torch_tensor)
 		}
 		write_to_fpga_raw(tensor);
 	} else {
-		//auto tensor_acc = torch_tensor.packed_accessor32<int, 4, torch::RestrictPtrTraits>();
-		//int C = tensor_acc.size(1);
-		//int H = tensor_acc.size(2);
-		//int W = tensor_acc.size(3);
+		/* auto tensor_acc = torch_tensor.packed_accessor64<int, 4>();
+		int C = tensor_acc.size(1);
+		int H = tensor_acc.size(2);
+		int W = tensor_acc.size(3); */
 		//int chunks_num = (int)ceil(C*H*W / ((struct dma_status *)buf)->altera_dma_num_dwords);
 		//for (int i = 0; i < chunks_num; i++){
 			// Maximum number of threads per block (1024) on the TX2 Pascal arch
 			// Split tensor into accesses of N blocks with 1024 threads
-			//read_from_gpu<<<2,1024>>>(tensor_acc, &tensor);
-			//printf("Value 0 = %d\n",tensor[0]);
-			//write_to_fpga_raw(tensor);
+			/* read_from_gpu<<<2,1024>>>(tensor_acc, &tensor);
+			printf("Value 0 = %d\n",tensor[0]);
+			write_to_fpga_raw(tensor); */
 		//}
-		torch::Tensor foo = torch::rand({12});
-
+		int length = 12;
+		torch::Tensor foo = torch::rand(length,torch::TensorOptions().device(torch::kCUDA).dtype(torch::kFloat32));
 		// assert foo is 2-dimensional and holds floats.
 		auto foo_a = foo.packed_accessor64<float,1>();
-		float trace = 0;
-
-		packed_accessor_kernel<<<1, 12>>>(foo_a, trace);
-		printf("%d\n", trace);
+		float* trace;
+		cudaHostAlloc((void **)&trace, length*sizeof(float), cudaHostAllocMapped);
+		float* dev_ptr;
+		// Pass pointer to device 
+		cudaHostGetDevicePointer((void **)&dev_ptr, (void *)trace, 0);
+		const dim3 threads(12);
+		const dim3 blocks(length/threads.x);
+		packed_accessor_kernel<<<blocks, threads>>>(foo_a, dev_ptr);
+		for (unsigned int i = 0; i < length; i++) printf("%1.2f\n",trace[i]);
+		cudaDeviceSynchronize();
+		cudaFreeHost(trace);
+		cudaFree(dev_ptr);
+		cudaDeviceReset();
 	}
 	return 0;
 }

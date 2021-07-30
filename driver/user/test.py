@@ -33,6 +33,7 @@ comm.open()
 #for i in range (100):
 # Start random Integer tensor (Range 0x0 to max signed integer value 0x7FFFFFFF or 2147483647d)
 input = torch.randint(2147483647,(1,8,16,16), dtype = torch.int32, device = "cuda")
+#torch.reshape(torch.transpose(torch.transpose(input,1,2),2,3),(1,8*16*16))
 # Write tensor to On-Chip memory on FPGA
 print("Write random Int32 tensor with values between 0-0x7FFFFFFF")
 start = time.time()
