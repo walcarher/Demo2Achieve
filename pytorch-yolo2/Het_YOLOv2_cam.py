@@ -7,7 +7,7 @@
 # Modifications to include TX2 onboard camera detection, heterogeneous model partitioning and device monitor 
 # by: Walther Carballo Hernandez
 # Please refer to: https://github.com/walcarher
-# Modifications Copyright (c) 2019 Institut Pascal
+# Modifications Copyright (c) 2021 Institut Pascal
 
 #Copyright (c) 2015 Preferred Infrastructure, Inc.
 #Copyright (c) 2015 Preferred Networks, Inc.
