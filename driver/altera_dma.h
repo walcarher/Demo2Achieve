@@ -42,7 +42,7 @@
 #define DESC_CTRLLER_BASE               0x0000
 #define CTL_STS_BITS                    0x0100
 #define TIMEOUT_THRESH                  0xFFFF
-#define MAX_NUM_DWORDS                  0x0800//0xFFFF//0x7FFFF//4096// 65K Max for the TX2
+#define MAX_NUM_DWORDS                  0x0800//0xFFFF//0x7FFFF//4096// 64K Max for the TX2
 
 //Arria 10
 #ifdef ARRIA10
