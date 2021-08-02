@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
-#include <math.h>
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include "../altera_dma_cmd.h"
@@ -96,40 +95,6 @@ int close_fpga()
 	return 0;
 }
 
-torch::Tensor quantize_tensor8b(torch::Tensor torch_tensor)
-{
-	if (torch_tensor.dim() != 4){
-		printf("Error: Only 2D-Conv supported. Tensor must be dimension 4.\n");
-		return torch_tensor;
-	}
-	if (torch_tensor.device().is_cpu()) {
-		auto torch_tensor8b = torch_tensor.to(torch::kUInt8);
-		auto tensor_acc = torch_tensor8b.accessor<uint8_t, 4>();
-		int C = tensor_acc.size(1);
-		int H = tensor_acc.size(2);
-		int W = tensor_acc.size(3);
-		torch::Tensor quantized_tensor = torch::empty({1,(int)ceil(C/4),H,W},torch::TensorOptions().dtype(torch::kInt32).device(torch::kCPU));
-		int qC = quantized_tensor.size(1);
-		int qH = quantized_tensor.size(2);
-		int qW = quantized_tensor.size(3);
-		int qc, qh, qw;
-		for (qh = 0 ; qh < qH; qh++) {
-			for (qw = 0 ; qw < qW; qw++) {
-				for (qc = 0 ; qc < qC; qc++) {
-					// Packing 4 Bytes (4 depth tensor elements) in a single 32b DWORD
-					quantized_tensor[0][qc][qh][qw] = (tensor_acc[0][qc*4+3][qh][qw] << 24) + 
-													  (tensor_acc[0][qc*4+2][qh][qw] << 16) + 
-													  (tensor_acc[0][qc*4+1][qh][qw] << 8) + 
-													   tensor_acc[0][qc*4][qh][qw];
-				}
-			}
-		}
-		return quantized_tensor;
-	} else{
-		return torch_tensor;
-	}
-}
-
 int write_to_fpga(torch::Tensor torch_tensor)
 {
 	if (torch_tensor.dim() != 4){
@@ -202,7 +167,6 @@ torch::Tensor read_from_fpga(torch::Tensor torch_tensor)
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 	m.def("open", &open_fpga, "Open FPGA device");
 	m.def("close", &close_fpga, "Close FPGA device");
-	m.def("quantize", &quantize_tensor8b, "Quantize Tensor to 8b");
 	m.def("write", &write_to_fpga, "Tensor write to FPGA");
 	m.def("read", &read_from_fpga, "Tensor read from FPGA");
 }
