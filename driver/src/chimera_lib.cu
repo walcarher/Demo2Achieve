@@ -101,8 +101,11 @@ int close_fpga()
 int write_to_fpga(torch::Tensor torch_tensor)
 {
 	if (torch_tensor.dim() != 4){
-		printf("Error: Only 2D-Conv supported. Tensor must be dimension 4.\n");
+		printf("Error: Only 2D-Conv supported. Tensor must be dimension 4. Batch x Depth x Height x Width.\n");
 		return 1;
+	}
+	if (torch_tensor.size(0) > 1){
+		printf("Warning: Only Batch size of 1 is supported.\n");
 	}
 	if (torch_tensor.device().is_cpu()) {
 		auto tensor_acc = torch_tensor.accessor<int, 4>();
@@ -147,7 +150,6 @@ int write_to_fpga(torch::Tensor torch_tensor)
 			// Maximum number of threads per block (1024) on the TX2 Pascal arch
 			// Split tensor into accesses of N blocks with 1024 threads
 			read_from_gpu<<<blocks,threads>>>(tensor_acc, dev_ptr, ((struct dma_status *)buf)->altera_dma_num_dwords, i);
-			//print_tensor(((struct dma_status *)buf)->altera_dma_num_dwords, tensor);
 			cudaDeviceSynchronize();
 			write_to_fpga_raw(tensor); 
 		}
@@ -158,12 +160,21 @@ int write_to_fpga(torch::Tensor torch_tensor)
 torch::Tensor read_from_fpga(torch::Tensor torch_tensor)
 {
 	if (torch_tensor.dim() != 4){
-		printf("Error: Only 2D-Conv supported. Tensor must be dimension 4.\n");
+		printf("Error: Only 2D-Conv supported. Tensor must be dimension 4. Batch x Depth x Height x Width.\n");
 		return torch_tensor;
 	}
-	tensor = read_from_fpga_raw(tensor);
-	//print_tensor(((struct dma_status *)buf)->altera_dma_num_dwords, tensor);
-	torch_tensor = torch::from_blob(tensor, {torch_tensor.size(0),torch_tensor.size(1),torch_tensor.size(2),torch_tensor.size(3)}, torch::dtype(torch::kInt32));
+	if (torch_tensor.size(0) > 1){
+		printf("Warning: Only Batch size of 1 is supported.\n");
+	}
+	if (torch_tensor.device().is_cpu()) {
+		auto options = torch::TensorOptions().dtype(torch::kInt32).device(torch::kCPU);
+		tensor = read_from_fpga_raw(tensor);
+		torch_tensor = torch::from_blob(tensor, {torch_tensor.size(0),torch_tensor.size(2),torch_tensor.size(3),torch_tensor.size(1)},options);
+	} else{
+		auto options = torch::TensorOptions().dtype(torch::kInt32).device(torch::kCUDA);
+		tensor = read_from_fpga_raw(tensor);
+		torch_tensor = torch::from_blob(tensor, {torch_tensor.size(0),torch_tensor.size(2),torch_tensor.size(3),torch_tensor.size(1)},options);
+	}
 	return torch_tensor;
 }
 

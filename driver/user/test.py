@@ -37,8 +37,24 @@ def quantize_tensor(tensor):
                             16*torch.ones([1,1,H,W], device = dev, dtype = torch.int32),  
                             24*torch.ones([1,1,H,W], device = dev, dtype = torch.int32)),1)
     for c in range(qtensor.size(1)):
-        tensor_data[0][(c*4):(c*4+4)][:][:] = tensor_data[0][(c*4):(c*4+4)][:][:] << shift_tensor[0]
-        qtensor[0][c][:][:] = tensor_data[0][c*4][:][:] | tensor_data[0][c*4+1][:][:] | tensor_data[0][c*4+2][:][:] | tensor_data[0][c*4+3][:][:]
+        if (c*4+3 < C):
+            tensor_data[0][(c*4):(c*4+4)][:][:] = tensor_data[0][(c*4):(c*4+4)][:][:] << shift_tensor[0]
+            qtensor[0][c][:][:] = tensor_data[0][c*4][:][:]   | \
+                                  tensor_data[0][c*4+1][:][:] | \
+                                  tensor_data[0][c*4+2][:][:] | \
+                                  tensor_data[0][c*4+3][:][:]
+        elif (c*4+2 < C):
+            tensor_data[0][(c*4):(c*4+3)][:][:] = tensor_data[0][(c*4):(c*4+3)][:][:] << shift_tensor[0][0:3]
+            qtensor[0][c][:][:] = tensor_data[0][c*4][:][:]   | \
+                                  tensor_data[0][c*4+1][:][:] | \
+                                  tensor_data[0][c*4+2][:][:]
+        elif (c*4+1 < C):
+            tensor_data[0][(c*4):(c*4+2)][:][:] = tensor_data[0][(c*4):(c*4+2)][:][:] << shift_tensor[0][0:2]
+            qtensor[0][c][:][:] = tensor_data[0][c*4][:][:]   | \
+                                  tensor_data[0][c*4+1][:][:]
+        else:
+            tensor_data[0][(c*4):(c*4+1)][:][:] = tensor_data[0][(c*4):(c*4+1)][:][:] << shift_tensor[0][0:1]
+            qtensor[0][c][:][:] = tensor_data[0][c*4][:][:]
     return qtensor
 
 print("Int32 tensor transfer test (chunks of 2048 DWords)")
@@ -72,7 +88,7 @@ input = torch.zeros((1,8,16,16), dtype = torch.int32, device = "cuda")
 # Start input tensor with an increasing sequence from 0 up to 255
 # for C*H*W/256 times starting with dimension 1, then 2 and finally 3
 input = init_tensor(input)
-# Quantize and pack DWORDs in a single 32b Integer (4 UInt DWORDs per address)
+# Quantize and pack DWORDs in a single 32b Integer (4 DWORDs with 4 UInt8 per address)
 # Tensor depth (channel) dimension is reduced by 4 
 print("Quantize Int32 tensor to Int8 and compress it to Int32 with C/4")
 start = time.time()
@@ -80,18 +96,19 @@ quantized_input = quantize_tensor(input)
 elapsed = time.time() - start
 print("Quantization elapsed time:", elapsed*1000, " ms")
 # Write tensor to On-Chip memory on FPGA
-print("Write Int32 tensor sequence with values from 0-C*H*W-1")
+print("Write Int32 tensor sequence with values from 0 to 255 for CHW/256 times")
 start = time.time()
 comm.write(quantized_input)
 elapsed = time.time() - start
 print("Write elapsed time:", elapsed*1000, " ms")
-# Initialize empty tensor with a given dimension and size
-output = torch.empty((1,8,16,16), dtype = torch.int32, device = "cpu")
+# Initialize an empty ouput tensor with a given dimension and size to be read
+output = torch.empty((1,8,16,16), dtype = torch.int32, device = "cuda")
 # Read tensor from On-Chip memory from FPGA as Integer32
 print("Read Int32 tensor with values 0x7FFFFFFF")
 start = time.time()
 output = comm.read(output)
 elapsed = time.time() - start
 print("Read elapsed time:", elapsed*1000, " ms")
+print(output)
 # Closing device and freeing memory
 comm.close()
