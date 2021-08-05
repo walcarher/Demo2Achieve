@@ -17,7 +17,6 @@ def init_tensor(tensor):
                 i += 1
                 if i == 256:
                     i = 0
-                #tensor[0][c][h][w] = 0
     return tensor
     
 def quantize_tensor(tensor):
@@ -25,7 +24,6 @@ def quantize_tensor(tensor):
     H = tensor.size(2)
     W = tensor.size(3)
     if tensor.is_cuda:
-        #tensor_data = tensor.data.to(torch.int32)
         tensor_data = tensor.data.to(torch.int32)
         dev = "cuda"
     else:

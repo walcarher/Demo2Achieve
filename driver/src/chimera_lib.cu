@@ -166,16 +166,26 @@ torch::Tensor read_from_fpga(torch::Tensor torch_tensor)
 	if (torch_tensor.size(0) > 1){
 		printf("Warning: Only Batch size of 1 is supported.\n");
 	}
+	auto options = torch::TensorOptions().dtype(torch::kInt32);
 	if (torch_tensor.device().is_cpu()) {
-		auto options = torch::TensorOptions().dtype(torch::kInt32).device(torch::kCPU);
-		tensor = read_from_fpga_raw(tensor);
-		torch_tensor = torch::from_blob(tensor, {torch_tensor.size(0),torch_tensor.size(2),torch_tensor.size(3),torch_tensor.size(1)},options);
+		options.device(torch::kCPU);
 	} else{
-		auto options = torch::TensorOptions().dtype(torch::kInt32).device(torch::kCUDA);
-		tensor = read_from_fpga_raw(tensor);
-		torch_tensor = torch::from_blob(tensor, {torch_tensor.size(0),torch_tensor.size(2),torch_tensor.size(3),torch_tensor.size(1)},options);
+		options.device(torch::kCUDA);
 	}
-	return torch_tensor;
+	int C = torch_tensor.size(1);
+	int H = torch_tensor.size(2);
+	int W = torch_tensor.size(3);
+	torch::Tensor output_tensor = torch::zeros({1, C, H ,W},options);
+	tensor = read_from_fpga_raw(tensor);
+	torch_tensor = torch::from_blob(tensor, {torch_tensor.size(0),W,H,(C+3)/4},options);
+	torch::Tensor temp_tensor = torch_tensor.permute({0,3,2,1}).permute({0,1,3,2});
+	for(int c = 0; c < temp_tensor.size(1); c++){
+		output_tensor[0][4*c] = temp_tensor[0][c].bitwise_and(255);
+		output_tensor[0][4*c+1] = temp_tensor[0][c].bitwise_and(65280).__rshift__(8);
+		output_tensor[0][4*c+2] = temp_tensor[0][c].bitwise_and(16711680).__rshift__(16);
+		output_tensor[0][4*c+3] = temp_tensor[0][c].bitwise_and(-16777216).__rshift__(24); // check here
+	}
+	return output_tensor;
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
