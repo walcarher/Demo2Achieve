@@ -175,17 +175,40 @@ torch::Tensor read_from_fpga(torch::Tensor torch_tensor)
 	int C = torch_tensor.size(1);
 	int H = torch_tensor.size(2);
 	int W = torch_tensor.size(3);
-	torch::Tensor output_tensor = torch::zeros({1, C, H ,W},options);
-	tensor = read_from_fpga_raw(tensor);
-	torch_tensor = torch::from_blob(tensor, {torch_tensor.size(0),W,H,(C+3)/4},options);
-	torch::Tensor temp_tensor = torch_tensor.permute({0,3,2,1}).permute({0,1,3,2});
-	for(int c = 0; c < temp_tensor.size(1); c++){
-		output_tensor[0][4*c] = temp_tensor[0][c].bitwise_and(255);
-		output_tensor[0][4*c+1] = temp_tensor[0][c].bitwise_and(65280).__rshift__(8);
-		output_tensor[0][4*c+2] = temp_tensor[0][c].bitwise_and(16711680).__rshift__(16);
-		output_tensor[0][4*c+3] = temp_tensor[0][c].bitwise_and(-16777216).__rshift__(24); // check here
+	int Cp = (C + 3) / 4; 
+	printf("Depth: %d\n", Cp);
+	int chunks_num = (Cp*H*W+((struct dma_status *)buf)->altera_dma_num_dwords-1)/((struct dma_status *)buf)->altera_dma_num_dwords;
+	printf("Num chunks: %d\n", chunks_num);
+	torch::Tensor temp_tensor = torch::zeros(chunks_num*((struct dma_status *)buf)->altera_dma_num_dwords, options);
+	//torch::Tensor squeezed_tensor = torch::zeros({C*H*W/4}, options);
+	for (int i = 0; i < chunks_num; i++){
+		tensor = read_from_fpga_raw(tensor);
+		temp_tensor.index_put_({torch::indexing::Slice(i*((struct dma_status *)buf)->altera_dma_num_dwords,i*((struct dma_status *)buf)->altera_dma_num_dwords+((struct dma_status *)buf)->altera_dma_num_dwords)},torch::from_blob(tensor, {((struct dma_status *)buf)->altera_dma_num_dwords}, options));
+		//torch_tensor = torch::from_blob(tensor, {torch_tensor.size(0),W,H,num_chunks},options);
 	}
-	return output_tensor;
+	printf("Temp Tensor size: %d\n", temp_tensor.size(0));
+	temp_tensor = temp_tensor.index({torch::indexing::Slice(0,H*W*Cp)}).reshape({1,H,W,Cp});
+	torch::Tensor temp_tensor_r = torch_tensor.permute({0,3,2,1}).permute({0,1,3,2});
+	//torch::Tensor temp_tensor = torch_tensor.permute({0,3,2,1}).permute({0,1,3,2});
+	// Unpack DWORDS by shifting and masking (4 features per DWORD)
+	for(int c = 0; c < Cp; c++){
+		if (4*c+3 < C) {
+			torch_tensor[0][4*c] = temp_tensor_r[0][c].bitwise_and(255);
+			torch_tensor[0][4*c+1] = temp_tensor_r[0][c].__rshift__(8).bitwise_and(255);
+			torch_tensor[0][4*c+2] = temp_tensor_r[0][c].__rshift__(16).bitwise_and(255);
+			torch_tensor[0][4*c+3] = temp_tensor_r[0][c].__rshift__(24).bitwise_and(255); 
+		} else if (4*c+2 < C) {
+			torch_tensor[0][4*c] = temp_tensor_r[0][c].bitwise_and(255);
+			torch_tensor[0][4*c+1] = temp_tensor_r[0][c].__rshift__(8).bitwise_and(255);
+			torch_tensor[0][4*c+2] = temp_tensor_r[0][c].__rshift__(16).bitwise_and(255);
+		} else if (4*c+1 < C) {
+			torch_tensor[0][4*c] = temp_tensor_r[0][c].bitwise_and(255);
+			torch_tensor[0][4*c+1] = temp_tensor_r[0][c].__rshift__(8).bitwise_and(255);
+		} else {
+			torch_tensor[0][4*c] = temp_tensor_r[0][c].bitwise_and(255);
+		}
+	}
+	return torch_tensor;
 }
 
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {

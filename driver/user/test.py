@@ -99,8 +99,8 @@ start = time.time()
 comm.write(quantized_input)
 elapsed = time.time() - start
 print("Write elapsed time:", elapsed*1000, " ms")
-# Initialize an empty ouput tensor with a given dimension and size to be read
-output = torch.empty((1,8,16,16), dtype = torch.int32, device = "cuda")
+# Initialize an zeros ouput tensor with a given dimension and size to be read
+output = torch.zeros((1,16,16,16), dtype = torch.int32, device = "cuda")
 # Read tensor from On-Chip memory from FPGA as Integer32
 print("Read Int32 tensor with values 0x7FFFFFFF")
 start = time.time()
