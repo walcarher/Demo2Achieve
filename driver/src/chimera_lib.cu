@@ -98,6 +98,39 @@ int close_fpga()
 	return 0;
 }
 
+torch::Tensor quantize_tensor(torch::Tensor torch_tensor)
+{
+	if (torch_tensor.dim() != 4){
+		printf("Error: Only 2D-Conv supported. Tensor must be dimension 4. Batch x Depth x Height x Width.\n");
+		return torch_tensor;
+	}
+	if (torch_tensor.size(0) > 1){
+		printf("Warning: Only Batch size of 1 is supported.\n");
+	}
+	auto options = torch::TensorOptions().dtype(torch::kInt32);
+	if (torch_tensor.device().is_cpu()) {
+		options.device(torch::kCPU);
+	} else{
+		options.device(torch::kCUDA);
+	}
+	int C = torch_tensor.size(1);
+	int H = torch_tensor.size(2);
+	int W = torch_tensor.size(3);
+	torch::Tensor quantized_tensor = torch::empty({1,(C+3)/4,H,W}, options); 
+	for (int c = 0; c < quantized_tensor.size(1); c++){
+		if (c*4+3 < C){
+			quantized_tensor[0][c] = torch_tensor[0][4*c].bitwise_or(torch_tensor[0][4*c+1].__lshift__(8)).bitwise_or(torch_tensor[0][4*c+2].__lshift__(16)).bitwise_or(torch_tensor[0][4*c+3].__lshift__(24));
+		} else if (c*4+2 < C){
+			quantized_tensor[0][c] = torch_tensor[0][4*c].bitwise_or(torch_tensor[0][4*c+1].__lshift__(8)).bitwise_or(torch_tensor[0][4*c+2].__lshift__(16));
+		} else if (c*4+1 < C){
+			quantized_tensor[0][c] = torch_tensor[0][4*c].bitwise_or(torch_tensor[0][4*c+1].__lshift__(8));
+		} else {
+			quantized_tensor[0][c] = torch_tensor[0][4*c];
+		}
+	}
+	return quantized_tensor; 
+}
+
 int write_to_fpga(torch::Tensor torch_tensor)
 {
 	if (torch_tensor.dim() != 4){
@@ -176,36 +209,31 @@ torch::Tensor read_from_fpga(torch::Tensor torch_tensor)
 	int H = torch_tensor.size(2);
 	int W = torch_tensor.size(3);
 	int Cp = (C + 3) / 4; 
-	printf("Depth: %d\n", Cp);
 	int chunks_num = (Cp*H*W+((struct dma_status *)buf)->altera_dma_num_dwords-1)/((struct dma_status *)buf)->altera_dma_num_dwords;
-	printf("Num chunks: %d\n", chunks_num);
-	torch::Tensor temp_tensor = torch::zeros(chunks_num*((struct dma_status *)buf)->altera_dma_num_dwords, options);
-	//torch::Tensor squeezed_tensor = torch::zeros({C*H*W/4}, options);
+	torch::Tensor temp_tensor = torch::empty(chunks_num*((struct dma_status *)buf)->altera_dma_num_dwords, options);
+	// Read several tensors from On-Chip RAM and buffer it in a squeezed tensor
 	for (int i = 0; i < chunks_num; i++){
 		tensor = read_from_fpga_raw(tensor);
 		temp_tensor.index_put_({torch::indexing::Slice(i*((struct dma_status *)buf)->altera_dma_num_dwords,i*((struct dma_status *)buf)->altera_dma_num_dwords+((struct dma_status *)buf)->altera_dma_num_dwords)},torch::from_blob(tensor, {((struct dma_status *)buf)->altera_dma_num_dwords}, options));
-		//torch_tensor = torch::from_blob(tensor, {torch_tensor.size(0),W,H,num_chunks},options);
 	}
-	printf("Temp Tensor size: %d\n", temp_tensor.size(0));
-	temp_tensor = temp_tensor.index({torch::indexing::Slice(0,H*W*Cp)}).reshape({1,H,W,Cp});
-	torch::Tensor temp_tensor_r = torch_tensor.permute({0,3,2,1}).permute({0,1,3,2});
-	//torch::Tensor temp_tensor = torch_tensor.permute({0,3,2,1}).permute({0,1,3,2});
+	// Unsqueeze tensor
+	temp_tensor = temp_tensor.index({torch::indexing::Slice(0,H*W*Cp)}).reshape({1,H,W,Cp}).permute({0,3,2,1}).permute({0,1,3,2});
 	// Unpack DWORDS by shifting and masking (4 features per DWORD)
 	for(int c = 0; c < Cp; c++){
 		if (4*c+3 < C) {
-			torch_tensor[0][4*c] = temp_tensor_r[0][c].bitwise_and(255);
-			torch_tensor[0][4*c+1] = temp_tensor_r[0][c].__rshift__(8).bitwise_and(255);
-			torch_tensor[0][4*c+2] = temp_tensor_r[0][c].__rshift__(16).bitwise_and(255);
-			torch_tensor[0][4*c+3] = temp_tensor_r[0][c].__rshift__(24).bitwise_and(255); 
+			torch_tensor[0][4*c] = temp_tensor[0][c].bitwise_and(255);
+			torch_tensor[0][4*c+1] = temp_tensor[0][c].__rshift__(8).bitwise_and(255);
+			torch_tensor[0][4*c+2] = temp_tensor[0][c].__rshift__(16).bitwise_and(255);
+			torch_tensor[0][4*c+3] = temp_tensor[0][c].__rshift__(24).bitwise_and(255); 
 		} else if (4*c+2 < C) {
-			torch_tensor[0][4*c] = temp_tensor_r[0][c].bitwise_and(255);
-			torch_tensor[0][4*c+1] = temp_tensor_r[0][c].__rshift__(8).bitwise_and(255);
-			torch_tensor[0][4*c+2] = temp_tensor_r[0][c].__rshift__(16).bitwise_and(255);
+			torch_tensor[0][4*c] = temp_tensor[0][c].bitwise_and(255);
+			torch_tensor[0][4*c+1] = temp_tensor[0][c].__rshift__(8).bitwise_and(255);
+			torch_tensor[0][4*c+2] = temp_tensor[0][c].__rshift__(16).bitwise_and(255);
 		} else if (4*c+1 < C) {
-			torch_tensor[0][4*c] = temp_tensor_r[0][c].bitwise_and(255);
-			torch_tensor[0][4*c+1] = temp_tensor_r[0][c].__rshift__(8).bitwise_and(255);
+			torch_tensor[0][4*c] = temp_tensor[0][c].bitwise_and(255);
+			torch_tensor[0][4*c+1] = temp_tensor[0][c].__rshift__(8).bitwise_and(255);
 		} else {
-			torch_tensor[0][4*c] = temp_tensor_r[0][c].bitwise_and(255);
+			torch_tensor[0][4*c] = temp_tensor[0][c].bitwise_and(255);
 		}
 	}
 	return torch_tensor;
@@ -214,6 +242,7 @@ torch::Tensor read_from_fpga(torch::Tensor torch_tensor)
 PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
 	m.def("open", &open_fpga, "Open FPGA device");
 	m.def("close", &close_fpga, "Close FPGA device");
+	m.def("quantize", &quantize_tensor, "Quantize and Pack to int32 tensor");
 	m.def("write", &write_to_fpga, "Tensor write to FPGA");
 	m.def("read", &read_from_fpga, "Tensor read from FPGA");
 }

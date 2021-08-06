@@ -18,47 +18,11 @@ def init_tensor(tensor):
                 if i == 256:
                     i = 0
     return tensor
-    
-def quantize_tensor(tensor):
-    C = tensor.size(1)
-    H = tensor.size(2)
-    W = tensor.size(3)
-    if tensor.is_cuda:
-        tensor_data = tensor.data.to(torch.int32)
-        dev = "cuda"
-    else:
-        tensor_data = tensor.to(torch.int32)
-        dev = "cpu"
-    qtensor = torch.empty([1,math.ceil(C/4),H,W], dtype = torch.int32, device = dev)
-    shift_tensor = torch.cat((torch.zeros([1,1,H,W], device = dev, dtype = torch.int32),  
-                            8*torch.ones([1,1,H,W],  device = dev, dtype = torch.int32),  
-                            16*torch.ones([1,1,H,W], device = dev, dtype = torch.int32),  
-                            24*torch.ones([1,1,H,W], device = dev, dtype = torch.int32)),1)
-    for c in range(qtensor.size(1)):
-        if (c*4+3 < C):
-            tensor_data[0][(c*4):(c*4+4)][:][:] = tensor_data[0][(c*4):(c*4+4)][:][:] << shift_tensor[0]
-            qtensor[0][c][:][:] = tensor_data[0][c*4][:][:]   | \
-                                  tensor_data[0][c*4+1][:][:] | \
-                                  tensor_data[0][c*4+2][:][:] | \
-                                  tensor_data[0][c*4+3][:][:]
-        elif (c*4+2 < C):
-            tensor_data[0][(c*4):(c*4+3)][:][:] = tensor_data[0][(c*4):(c*4+3)][:][:] << shift_tensor[0][0:3]
-            qtensor[0][c][:][:] = tensor_data[0][c*4][:][:]   | \
-                                  tensor_data[0][c*4+1][:][:] | \
-                                  tensor_data[0][c*4+2][:][:]
-        elif (c*4+1 < C):
-            tensor_data[0][(c*4):(c*4+2)][:][:] = tensor_data[0][(c*4):(c*4+2)][:][:] << shift_tensor[0][0:2]
-            qtensor[0][c][:][:] = tensor_data[0][c*4][:][:]   | \
-                                  tensor_data[0][c*4+1][:][:]
-        else:
-            tensor_data[0][(c*4):(c*4+1)][:][:] = tensor_data[0][(c*4):(c*4+1)][:][:] << shift_tensor[0][0:1]
-            qtensor[0][c][:][:] = tensor_data[0][c*4][:][:]
-    return qtensor
 
 print("Int32 tensor transfer test (chunks of 2048 DWords)")
 
 # FPGA communication function declaration
-class fpga_comm(torch.autograd.Function):
+class fpga_comm(torch.nn.Module):
     @staticmethod
     def open():
         if chimera_lib.open():
@@ -69,12 +33,17 @@ class fpga_comm(torch.autograd.Function):
         chimera_lib.close()
         
     @staticmethod
+    def quantize(input):
+        output = chimera_lib.read(input)
+        return output
+        
+    @staticmethod
     def write(input):
         chimera_lib.write(input)
         
     @staticmethod
-    def read(output):
-        output = chimera_lib.read(output)
+    def read(input):
+        output = chimera_lib.read(input)
         return output
 
 # Function call   
@@ -88,9 +57,9 @@ input = torch.zeros((1,8,16,16), dtype = torch.int32, device = "cuda")
 input = init_tensor(input)
 # Quantize and pack DWORDs in a single 32b Integer (4 DWORDs with 4 UInt8 per address)
 # Tensor depth (channel) dimension is reduced by 4 
-print("Quantize Int32 tensor to Int8 and compress it to Int32 with C/4")
+print("Quantize tensor to Int8 and compress into a Int32 Tensor with C/4")
 start = time.time()
-quantized_input = quantize_tensor(input)
+quantized_input = chimera_lib.quantize(input)
 elapsed = time.time() - start
 print("Quantization elapsed time:", elapsed*1000, " ms")
 # Write tensor to On-Chip memory on FPGA
@@ -100,13 +69,12 @@ comm.write(quantized_input)
 elapsed = time.time() - start
 print("Write elapsed time:", elapsed*1000, " ms")
 # Initialize an zeros ouput tensor with a given dimension and size to be read
-output = torch.zeros((1,16,16,16), dtype = torch.int32, device = "cuda")
+output = torch.zeros((1,8,16,16), dtype = torch.int32, device = "cuda")
 # Read tensor from On-Chip memory from FPGA as Integer32
-print("Read Int32 tensor with values 0x7FFFFFFF")
+print("Read Int32 tensor with a sequence from 0-255")
 start = time.time()
 output = comm.read(output)
 elapsed = time.time() - start
 print("Read elapsed time:", elapsed*1000, " ms")
-print(output)
 # Closing device and freeing memory
 comm.close()
