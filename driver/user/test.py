@@ -77,4 +77,5 @@ output = comm.read(output)
 elapsed = time.time() - start
 print("Read elapsed time:", elapsed*1000, " ms")
 # Closing device and freeing memory
+#print(output)
 comm.close()
