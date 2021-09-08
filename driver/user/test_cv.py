@@ -8,7 +8,7 @@ import chimera_lib
 # Importing OpenCV for Computer Vision and Image Processing
 import cv2
 
-print("Int32 tensor transfer test (chunks of 2048 DWords)")
+print("Heterogeneous Image Binarization: Task partitioning with Tiling")
 
 # FPGA communication function declaration
 class fpga_comm(torch.nn.Module):
@@ -40,62 +40,59 @@ def test():
     cap = cv2.VideoCapture("nvarguscamerasrc ! video/x-raw(memory:NVMM), width=(int)1280, height=(int)720,format=(string)NV12, framerate=(fraction)60/1 ! nvvidconv ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink drop=1")
     if cap.isOpened():
     	# Window creation and specifications
-        windowName = "OpenCV Camera Test"
-        cv2.namedWindow(windowName, cv2.WINDOW_NORMAL)
-        cv2.moveWindow(windowName,0,0)
-        cv2.resizeWindow(windowName,640,480)
-        cv2.setWindowTitle(windowName,"OpenCV Camera Test")
+        width = 640
+        height = 480
+        windowNameGPU = "RGB Image on CPU/GPU"
+        cv2.namedWindow(windowNameGPU, cv2.WINDOW_NORMAL)
+        cv2.moveWindow(windowNameGPU,0,0)
+        cv2.resizeWindow(windowNameGPU,width,height)
+        cv2.setWindowTitle(windowNameGPU, "RGB Image on CPU/GPU")
+        windowNameFPGA = "Binarized Image on FPGA"
+        cv2.namedWindow(windowNameFPGA, cv2.WINDOW_NORMAL)
+        cv2.moveWindow(windowNameFPGA,0,0)
+        cv2.resizeWindow(windowNameFPGA,width,height)
+        cv2.setWindowTitle(windowNameFPGA,"Binarized Image on FPGA")
         font = cv2.FONT_HERSHEY_PLAIN
-        helpText="'Esc' to Quit"
-        showFullScreen = False
-        showHelp = False
         start = 0.0
         end = 0.0
     else:
         print("Unable to open camera")
         exit(-1)
-        
+    
+    # Tile Size of 32
+    tile_size = 32
     # Function call for FPGA communication object   
     comm = fpga_comm()
     # Open FPGA Device
     comm.open()
     # Initilize output tensor
-    output = torch.zeros((1,1,32,32), dtype = torch.int32, device = "cpu")
+    output = torch.zeros((1,1,tile_size,tile_size), dtype = torch.int32, device = "cpu")
 
-    while True:
-        res, img = cap.read()
-        if res:
-            img = cv2.resize(img, (32,32))
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            input = torch.from_numpy(img)
-            input = input.to(dtype = torch.int32, device = "cpu").unsqueeze(0).unsqueeze(0)
-            comm.write(input)
-            output = comm.read(output)
-            img = np.uint8(output.numpy().squeeze(0).squeeze(0))
-            if showHelp == True:
-                cv2.putText(img, helpText, (11,20), font, 1.0, (32,32,32), 4, cv2.LINE_AA)
-                cv2.putText(img, helpText, (10,20), font, 1.0, (240,240,240), 1, cv2.LINE_AA)
-            end = time.time()
-            cv2.putText(img, "{0:.0f}fps".format(1/(end-start)), (531,50), font, 3.0, (32,32,32), 8, cv2.LINE_AA)
-            cv2.putText(img, "{0:.0f}fps".format(1/(end-start)), (530,50), font, 3.0, (240,240,240), 2, cv2.LINE_AA)
-            cv2.imshow(windowName, img)
-            start = time.time()
-            key = cv2.waitKey(1)
-            if key == 27: # Check for ESC key
+    res, img = cap.read()
+    if res:
+        #img = cv2.resize(img, (32,32))
+        img = cv2.resize(img, (width,height))
+        cv2.imshow(windowNameGPU, img)
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        input = torch.from_numpy(img)
+        input = input.to(dtype = torch.int32, device = "cpu").unsqueeze(0).unsqueeze(0)
+        for y in range(int(height/tile_size)):
+            for x in range(int(width/tile_size)):
+                #print("Tile [",x,",",y,"]")
+                comm.write(input[:,:,y*tile_size:(y*tile_size+tile_size),x*tile_size:(x*tile_size+tile_size)])
+                output = comm.read(output)
+                img[y*tile_size:(y*tile_size+tile_size),x*tile_size:(x*tile_size+tile_size)] = np.uint8(output.numpy().squeeze(0).squeeze(0))
+        cv2.imshow(windowNameFPGA, img)
+        while True:
+            key = cv2.waitKey(0)
+            if key == 27:
                 cv2.destroyAllWindows()
                 comm.close()
-                break;
-            elif key==74: # Toggle fullscreen; This is the F3 key on this particular keyboard
-                # Toggle full screen mode
-                if showFullScreen == False : 
-                    cv2.setWindowProperty(windowName, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-                else:
-                    cv2.setWindowProperty(windowName, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_NORMAL) 
-                    showFullScreen = not showFullScreen
-        else:
-             print("Unable to read image")
-             comm.close()
-             exit(-1) 
+                break
+    else:
+         print("Unable to read image")
+         comm.close()
+         exit(-1) 
 
 ############################################
 if __name__ == '__main__':

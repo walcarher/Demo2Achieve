@@ -9,7 +9,7 @@ Tested on custom CHIMERA board with Nvidia Jetson TX2 (with L4T 32.4.3) with the
 altera_dma -- Linux driver
 --------------------------
 
-Make sure to have turrned on and programmed the Intel Cyclone 10 GX FPGA with a compatible .SOF with PCI gen2 x4 lane Hard IP using the Intel Quartus 17.1 edition. The FPGA must be ready at boot. In case of out-of-sync issues soft reboot the system.The PCI co-processor device must be usable and visible using:
+Make sure to have turned on and programmed the Intel Cyclone 10 GX FPGA with a compatible .SOF with PCI gen2 x4 lane Hard IP using the Intel Quartus 17.1 edition. The FPGA must be ready at boot. In case of out-of-sync issues soft reboot the system.The PCI co-processor device must be usable and visible using:
 
     sudo lspci -vv
 
