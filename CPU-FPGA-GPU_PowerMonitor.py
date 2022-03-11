@@ -38,10 +38,18 @@ cpuLoadFile = '/sys/devices/3160000.i2c/i2c-0/0-0041/iio_device/in_power1_input'
 gpuLoadFile = '/sys/devices/3160000.i2c/i2c-0/0-0040/iio_device/in_power0_input' # GPU power channel
 fpgaLoadFile = '/sys/devices/3160000.i2c/i2c-0/0-0042/iio_device/in_power0_input' # FPGA core power channel
 
-fig = plt.figure(figsize=(7,3))
+# Dots Per Inch
+dpi = 100
+# Screen resolution
+W = 1920
+H = 1080
+fig = plt.figure(figsize=(W/(2*dpi),H/dpi))
 plt.subplots_adjust(top=0.85, bottom=0.30)
 fig.set_facecolor('#F2F1F0')
 fig.canvas.set_window_title('CPU-FPGA-GPU Power Monitor')
+#Display position / size setting here (described after graph generation)
+mngr = plt.get_current_fig_manager()
+mngr.window.setGeometry(W/2,0,W/2,H-80)#(Distance from left, distance from above, width, height)
 
 # Subplot for the CPU-FPGA-GPU activity
 ax = plt.subplot2grid((1,1), (0,0), rowspan=2, colspan=1)
@@ -73,14 +81,14 @@ def initGraph():
     global fpga_fill_lines
 
     ax.set_xlim(60, 0)
-    ax.set_ylim(-10, 10000)
+    ax.set_ylim(-10, 2000)
     ax.set_title('CPU-FPGA-GPU Power Plot')
     ax.set_ylabel('Power (mW)')
     ax.set_xlabel('Samples');
     ax.grid(color='gray', linestyle='dotted', linewidth=1)
 
     cpuLine.set_data([],[])
-    cpuLine.set_color('gray')
+    cpuLine.set_color('red')
     cpuLine.set_label('CPU')
     cpu_fill_lines=ax.fill_between(cpuLine.get_xdata(),50,0)
     gpuLine.set_data([],[])
@@ -122,7 +130,7 @@ def updateGraph(frame):
     cpuy_list.append(int(fileData))
     cpuLine.set_data(cpux_list,cpuy_list)
     cpu_fill_lines.remove()
-    cpu_fill_lines=ax.fill_between(cpux_list,0,cpuy_list, facecolor='gray', alpha=0.25)
+    cpu_fill_lines=ax.fill_between(cpux_list,0,cpuy_list, facecolor='red', alpha=0.25)
     # Draw average GPU power consumption
     gpuy_list.popleft()
     try:
@@ -154,4 +162,5 @@ def updateGraph(frame):
 animation = FuncAnimation(fig, updateGraph, frames=200,
                     init_func=initGraph,  interval=100, blit=True)
 
+plt.grid()
 plt.show()
